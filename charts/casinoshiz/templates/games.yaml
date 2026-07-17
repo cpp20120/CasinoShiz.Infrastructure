@@ -22,7 +22,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: game-{{ $name }}
-          image: "{{ $.Values.global.imageRegistry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          image: "{{ $.Values.global.imageRegistry }}/{{ $.Values.backendImage.repository }}:{{ $.Values.backendImage.tag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           env:
             - name: Backend__Modules
@@ -33,21 +33,29 @@ spec:
               value: "game-{{ $name }}"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.global.otelEndpoint | quote }}
+            - name: Redis__Enabled
+              value: "true"
             - name: Redis__ConnectionString
               valueFrom:
                 secretKeyRef:
-                  name: casinoshiz-secrets
+                  name: {{ $.Values.global.secretName }}
                   key: redis-connection-string
             - name: ConnectionStrings__Postgres
               valueFrom:
                 secretKeyRef:
-                  name: casinoshiz-secrets
-                  key: postgres-connection-string
+                  name: {{ $.Values.global.secretName }}
+                  key: backend-postgres-connection-string
           ports:
             - name: http
               containerPort: 8080
             - name: grpc
               containerPort: 8081
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -98,8 +106,22 @@ spec:
           type: Utilization
           averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
   behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+      selectPolicy: Max
     scaleDown:
       stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
 {{- end }}
 {{- end }}
 {{- end }}

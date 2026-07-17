@@ -1,26 +1,46 @@
 global:
-  domain: CHANGE_ME
   imageRegistry: ghcr.io/cpp20120
-
-image:
-  repository: casinoshiz
-  tag: CHANGE_ME_IMMUTABLE_TAG
 
 ingress:
   enabled: true
   className: traefik
   clusterIssuer: letsencrypt-production
 
+backendImage:
+  repository: casinoshiz-backend
+  tag: CHANGE_ME_BACKEND_DIGEST_OR_TAG
+
+services:
+  identity:
+    image:
+      repository: casinoshiz-identity
+      tag: CHANGE_ME
+  wallet:
+    image:
+      repository: casinoshiz-wallet
+      tag: CHANGE_ME
+  telegram-bff:
+    image:
+      repository: casinoshiz-telegram-bff
+      tag: CHANGE_ME
+    host: tg.CHANGE_ME
+  discord-bff:
+    image:
+      repository: casinoshiz-discord-bff
+      tag: CHANGE_ME
+  admin-bff:
+    image:
+      repository: casinoshiz-admin-bff
+      tag: CHANGE_ME
+    host: admin.CHANGE_ME
+  rest-api:
+    image:
+      repository: casinoshiz-rest-api
+      tag: CHANGE_ME
+    host: api.CHANGE_ME
+
 autoscaling:
   enabled: true
   minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 65
-
-services:
-  telegram-bff:
-    host: tg.CHANGE_ME
-  admin-bff:
-    host: admin.CHANGE_ME
-  rest-api:
-    host: api.CHANGE_ME

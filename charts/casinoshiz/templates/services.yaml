@@ -19,9 +19,10 @@ spec:
         app.kubernetes.io/name: {{ $svc.serviceName }}
         app.kubernetes.io/part-of: casinoshiz
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: {{ $svc.serviceName }}
-          image: "{{ $.Values.global.imageRegistry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image.repository }}:{{ $svc.image.tag }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           env:
             - name: Backend__ServiceName
@@ -30,21 +31,31 @@ spec:
               value: {{ $svc.serviceName | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.global.otelEndpoint | quote }}
-            - name: Redis__ConnectionString
-              valueFrom:
-                secretKeyRef:
-                  name: casinoshiz-secrets
-                  key: redis-connection-string
             - name: ConnectionStrings__Postgres
               valueFrom:
                 secretKeyRef:
-                  name: casinoshiz-secrets
-                  key: postgres-connection-string
+                  name: {{ $.Values.global.secretName }}
+                  key: {{ $svc.postgresSecretKey }}
+            - name: Redis__Enabled
+              value: {{ $svc.redisEnabled | quote }}
+            {{- if $svc.redisEnabled }}
+            - name: Redis__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: redis-connection-string
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ $svc.port }}
             - name: grpc
               containerPort: {{ $svc.grpcPort }}
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -85,7 +96,8 @@ metadata:
 spec:
   ingressClassName: {{ $.Values.ingress.className }}
   tls:
-    - hosts: [{{ $svc.host | quote }}]
+    - hosts:
+        - {{ $svc.host | quote }}
       secretName: {{ $svc.serviceName }}-tls
   rules:
     - host: {{ $svc.host | quote }}

@@ -1,18 +1,9 @@
 global:
   imageRegistry: ghcr.io/cpp20120
   imagePullPolicy: IfNotPresent
-  domain: example.com
   otelEndpoint: http://otel-collector.observability.svc.cluster.local:4317
   minioEndpoint: minio.data.svc.cluster.local:9000
-  redisHost: redis.data.svc.cluster.local
-  postgresHost: postgres.data.svc.cluster.local
-  operationsApiKeySecret:
-    name: casinoshiz-secrets
-    key: operations-api-key
-
-image:
-  repository: casinoshiz
-  tag: latest
+  secretName: casinoshiz-secrets
 
 common:
   replicas: 1
@@ -32,27 +23,36 @@ ingress:
 services:
   identity:
     enabled: true
-    project: CasinoShiz.IdentityService
+    image:
+      repository: casinoshiz-identity
+      tag: latest
     serviceName: identity
-    module: ""
+    postgresSecretKey: identity-postgres-connection-string
+    redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: false
 
   wallet:
     enabled: true
-    project: CasinoShiz.WalletService
+    image:
+      repository: casinoshiz-wallet
+      tag: latest
     serviceName: wallet
-    module: ""
+    postgresSecretKey: wallet-postgres-connection-string
+    redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: false
 
   telegram-bff:
     enabled: true
-    project: CasinoShiz.TelegramBff
+    image:
+      repository: casinoshiz-telegram-bff
+      tag: latest
     serviceName: telegram-bff
-    module: ""
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: true
     port: 8080
     grpcPort: 8081
     public: true
@@ -60,18 +60,24 @@ services:
 
   discord-bff:
     enabled: true
-    project: CasinoShiz.DiscordBff
+    image:
+      repository: casinoshiz-discord-bff
+      tag: latest
     serviceName: discord-bff
-    module: ""
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: true
     port: 8080
     grpcPort: 8081
     public: false
 
   admin-bff:
     enabled: true
-    project: CasinoShiz.AdminBff
+    image:
+      repository: casinoshiz-admin-bff
+      tag: latest
     serviceName: admin-bff
-    module: ""
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: true
@@ -79,13 +85,20 @@ services:
 
   rest-api:
     enabled: true
-    project: CasinoShiz.Api
+    image:
+      repository: casinoshiz-rest-api
+      tag: latest
     serviceName: rest-api
-    module: ""
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: true
     host: api.example.com
+
+backendImage:
+  repository: casinoshiz-backend
+  tag: latest
 
 games:
   dice: { enabled: true }
