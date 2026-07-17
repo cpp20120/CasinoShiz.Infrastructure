@@ -1,0 +1,105 @@
+{{- range $name, $game := .Values.games }}
+{{- if $game.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-{{ $name }}
+  labels:
+    {{- include "casinoshiz.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: game-{{ $name }}
+spec:
+  replicas: {{ $.Values.common.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: game-{{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: game-{{ $name }}
+        app.kubernetes.io/part-of: casinoshiz
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: game-{{ $name }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          env:
+            - name: Backend__Modules
+              value: {{ $name | quote }}
+            - name: Backend__ServiceName
+              value: "game-{{ $name }}"
+            - name: OTEL_SERVICE_NAME
+              value: "game-{{ $name }}"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.global.otelEndpoint | quote }}
+            - name: Redis__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: casinoshiz-secrets
+                  key: redis-connection-string
+            - name: ConnectionStrings__Postgres
+              valueFrom:
+                secretKeyRef:
+                  name: casinoshiz-secrets
+                  key: postgres-connection-string
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 8081
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml $.Values.common.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-{{ $name }}
+spec:
+  selector:
+    app.kubernetes.io/name: game-{{ $name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: grpc
+      port: 8081
+      targetPort: grpc
+{{- if $.Values.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: game-{{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-{{ $name }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+{{- end }}
+{{- end }}
+{{- end }}

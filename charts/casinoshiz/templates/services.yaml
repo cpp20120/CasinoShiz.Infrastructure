@@ -1,0 +1,103 @@
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.serviceName }}
+  labels:
+    {{- include "casinoshiz.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $svc.serviceName }}
+spec:
+  replicas: {{ $.Values.common.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $svc.serviceName }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $svc.serviceName }}
+        app.kubernetes.io/part-of: casinoshiz
+    spec:
+      containers:
+        - name: {{ $svc.serviceName }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          env:
+            - name: Backend__ServiceName
+              value: {{ $svc.serviceName | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ $svc.serviceName | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.global.otelEndpoint | quote }}
+            - name: Redis__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: casinoshiz-secrets
+                  key: redis-connection-string
+            - name: ConnectionStrings__Postgres
+              valueFrom:
+                secretKeyRef:
+                  name: casinoshiz-secrets
+                  key: postgres-connection-string
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+            - name: grpc
+              containerPort: {{ $svc.grpcPort }}
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml $.Values.common.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.serviceName }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $svc.serviceName }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+    - name: grpc
+      port: {{ $svc.grpcPort }}
+      targetPort: grpc
+{{- if and $.Values.ingress.enabled $svc.public }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $svc.serviceName }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ $.Values.ingress.clusterIssuer | quote }}
+spec:
+  ingressClassName: {{ $.Values.ingress.className }}
+  tls:
+    - hosts: [{{ $svc.host | quote }}]
+      secretName: {{ $svc.serviceName }}-tls
+  rules:
+    - host: {{ $svc.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $svc.serviceName }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}
+{{- end }}

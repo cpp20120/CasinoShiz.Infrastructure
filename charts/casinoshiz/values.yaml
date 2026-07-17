@@ -1,0 +1,114 @@
+global:
+  imageRegistry: ghcr.io/cpp20120
+  imagePullPolicy: IfNotPresent
+  domain: example.com
+  otelEndpoint: http://otel-collector.observability.svc.cluster.local:4317
+  minioEndpoint: minio.data.svc.cluster.local:9000
+  redisHost: redis.data.svc.cluster.local
+  postgresHost: postgres.data.svc.cluster.local
+  operationsApiKeySecret:
+    name: casinoshiz-secrets
+    key: operations-api-key
+
+image:
+  repository: casinoshiz
+  tag: latest
+
+common:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+ingress:
+  enabled: true
+  className: traefik
+  clusterIssuer: letsencrypt-production
+
+services:
+  identity:
+    enabled: true
+    project: CasinoShiz.IdentityService
+    serviceName: identity
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: false
+
+  wallet:
+    enabled: true
+    project: CasinoShiz.WalletService
+    serviceName: wallet
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: false
+
+  telegram-bff:
+    enabled: true
+    project: CasinoShiz.TelegramBff
+    serviceName: telegram-bff
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: true
+    host: tg.example.com
+
+  discord-bff:
+    enabled: true
+    project: CasinoShiz.DiscordBff
+    serviceName: discord-bff
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: false
+
+  admin-bff:
+    enabled: true
+    project: CasinoShiz.AdminBff
+    serviceName: admin-bff
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: true
+    host: admin.example.com
+
+  rest-api:
+    enabled: true
+    project: CasinoShiz.Api
+    serviceName: rest-api
+    module: ""
+    port: 8080
+    grpcPort: 8081
+    public: true
+    host: api.example.com
+
+games:
+  dice: { enabled: true }
+  dicecube: { enabled: true }
+  darts: { enabled: true }
+  football: { enabled: true }
+  basketball: { enabled: true }
+  bowling: { enabled: true }
+  transfer: { enabled: true }
+  redeem: { enabled: true }
+  leaderboard: { enabled: true }
+  pixelbattle: { enabled: true }
+  pick: { enabled: true }
+  blackjack: { enabled: true }
+  horse: { enabled: true }
+  challenges: { enabled: true }
+  poker: { enabled: true }
+  secrethitler: { enabled: true }
+  meta: { enabled: true }
+  admin: { enabled: true }
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 65

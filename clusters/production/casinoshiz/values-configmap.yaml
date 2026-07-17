@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: casinoshiz-production-values
+  namespace: casinoshiz
+data:
+  values.yaml: |
+    global:
+      domain: CHANGE_ME
+      imageRegistry: ghcr.io/cpp20120
+    image:
+      repository: casinoshiz
+      tag: CHANGE_ME
+    services:
+      telegram-bff:
+        host: tg.CHANGE_ME
+      admin-bff:
+        host: admin.CHANGE_ME
+      rest-api:
+        host: api.CHANGE_ME

@@ -1,0 +1,12 @@
+*.retry
+.env
+.env.*
+!.env.example
+.sops.yaml.local
+age.agekey
+kubeconfig
+*.tar
+*.tgz
+.DS_Store
+.idea/
+.vscode/

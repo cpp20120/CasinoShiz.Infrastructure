@@ -1,0 +1,31 @@
+- name: Install base packages
+  ansible.builtin.package:
+    name:
+      - curl
+      - ca-certificates
+      - git
+      - jq
+      - unzip
+    state: present
+
+- name: Enable time synchronization
+  ansible.builtin.service:
+    name: systemd-timesyncd
+    state: started
+    enabled: true
+  failed_when: false
+
+- name: Create persistent data root
+  ansible.builtin.file:
+    path: /srv/casinoshiz
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true

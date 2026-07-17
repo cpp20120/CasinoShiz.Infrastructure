@@ -1,0 +1,6 @@
+- name: Prepare CasinoShiz production host
+  hosts: all
+  become: true
+  roles:
+    - base
+    - k3s

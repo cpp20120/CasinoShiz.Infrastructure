@@ -1,0 +1,40 @@
+- name: Download k3s installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/install-k3s.sh
+    mode: "0755"
+
+- name: Build k3s install arguments
+  ansible.builtin.set_fact:
+    k3s_exec_args: >-
+      server
+      --write-kubeconfig-mode {{ k3s_write_kubeconfig_mode }}
+      {% for component in k3s_disable %}--disable {{ component }} {% endfor %}
+
+- name: Install k3s
+  ansible.builtin.command:
+    cmd: /tmp/install-k3s.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_EXEC: "{{ k3s_exec_args }}"
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Ensure k3s is enabled
+  ansible.builtin.service:
+    name: k3s
+    enabled: true
+    state: started
+
+- name: Read kubeconfig
+  ansible.builtin.slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig
+
+- name: Store kubeconfig locally
+  ansible.builtin.copy:
+    content: "{{ k3s_kubeconfig.content | b64decode | regex_replace('127.0.0.1', ansible_host) }}"
+    dest: "{{ playbook_dir }}/../../kubeconfig"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
