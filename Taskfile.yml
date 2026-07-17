@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: '3'
+
+set:
+  - errexit
+  - nounset
+  - pipefail
+
+vars:
+  CHART: charts/casinoshiz
+  NAMESPACE: casinoshiz
+  PRODUCTION_VALUES: charts/casinoshiz/values-production.yaml
+  RENDER_DIR: .task/rendered
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  tools:
+    desc: Check required local tools
+    preconditions:
+      - sh: command -v helm >/dev/null
+        msg: Helm is required
+      - sh: command -v kustomize >/dev/null
+        msg: Kustomize is required
+      - sh: command -v ansible-playbook >/dev/null
+        msg: Ansible is required for host checks
+    cmds:
+      - helm version --short
+      - kustomize version
+      - ansible-playbook --version | head -n 1
+
+  lint:
+    desc: Lint the CasinoShiz Helm chart
+    cmds:
+      - helm lint {{.CHART}} -f {{.PRODUCTION_VALUES}}
+
+  render:chart:
+    desc: Render the application Helm chart
+    cmds:
+      - mkdir -p {{.RENDER_DIR}}
+      - >-
+        helm template casinoshiz {{.CHART}}
+        --namespace {{.NAMESPACE}}
+        -f {{.PRODUCTION_VALUES}}
+        > {{.RENDER_DIR}}/casinoshiz.yaml
+    sources:
+      - charts/casinoshiz/**/*
+    generates:
+      - "{{.RENDER_DIR}}/casinoshiz.yaml"
+
+  render:cluster:
+    desc: Render the complete production Kustomize tree
+    cmds:
+      - mkdir -p {{.RENDER_DIR}}
+      - kustomize build clusters/production > {{.RENDER_DIR}}/production.yaml
+    sources:
+      - clusters/**/*
+      - platform/**/*
+      - data/**/*
+    generates:
+      - "{{.RENDER_DIR}}/production.yaml"
+
+  ansible:check:
+    desc: Validate the Ansible playbook syntax
+    dir: ansible
+    cmds:
+      - ansible-playbook playbooks/site.yml --syntax-check
+
+  secrets:check:
+    desc: Reject obvious plaintext secrets and unresolved production placeholders
+    cmds:
+      - |
+        if git grep -nE 'Password=[^$<{]|postgres-superuser-password: [^C]|redis-password: [^C]|minio-root-password: [^C]' \
+          -- ':!*.example' ':!docs/**' ':!charts/casinoshiz/templates/secret-example.yaml'; then
+          echo "Potential plaintext secret found."
+          exit 1
+        fi
+
+  placeholders:
+    desc: Show unresolved CHANGE_ME values
+    cmds:
+      - git grep -n CHANGE_ME || true
+
+  validate:
+    desc: Run all checks that do not require cluster access
+    deps:
+      - lint
+      - render:chart
+      - render:cluster
+    cmds:
+      - task: secrets:check
+
+  ci:
+    desc: CI entrypoint
+    cmds:
+      - task: validate
+
+  clean:
+    desc: Remove generated manifests
+    cmds:
+      - rm -rf .task

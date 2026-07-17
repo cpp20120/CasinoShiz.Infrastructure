@@ -20,19 +20,8 @@ jobs:
 
       - uses: imranismail/setup-kustomize@v2
 
-      - name: Helm lint
-        run: helm lint charts/casinoshiz
+      - name: Install Task
+        uses: go-task/setup-task@v1
 
-      - name: Render application chart
-        run: |
-          helm template casinoshiz charts/casinoshiz             --namespace casinoshiz             -f charts/casinoshiz/values-production.yaml             > /tmp/casinoshiz.yaml
-
-      - name: Render production tree
-        run: kustomize build clusters/production > /tmp/production.yaml
-
-      - name: Reject accidental plaintext secrets
-        run: |
-          if git grep -nE 'Password=(CHANGE_ME|[^$<{].+)|stringData:'             -- ':!*.example' ':!docs/**' ':!charts/casinoshiz/templates/secret-example.yaml'; then
-            echo "Potential plaintext secret found."
-            exit 1
-          fi
+      - name: Validate
+        run: task ci

@@ -11,6 +11,9 @@ common:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { cpu: "1", memory: 512Mi }
 
+monitoring:
+  enabled: true
+
 ingress:
   enabled: true
   className: traefik

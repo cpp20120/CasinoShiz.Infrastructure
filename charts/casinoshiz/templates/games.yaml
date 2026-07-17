@@ -75,6 +75,9 @@ apiVersion: v1
 kind: Service
 metadata:
   name: game-{{ $name }}
+  labels:
+    app.kubernetes.io/name: game-{{ $name }}
+    app.kubernetes.io/part-of: casinoshiz
 spec:
   selector:
     app.kubernetes.io/name: game-{{ $name }}

@@ -1,11 +1,15 @@
-{{- if .Values.monitoring.enabled }}
+{{- $monitoring := .Values.monitoring | default dict -}}
+{{- if ($monitoring.enabled | default false) }}
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
 metadata:
   name: casinoshiz
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
 spec:
   namespaceSelector:
-    matchNames: [{{ .Release.Namespace | quote }}]
+    matchNames:
+      - {{ .Release.Namespace | quote }}
   selector:
     matchLabels:
       app.kubernetes.io/part-of: casinoshiz
