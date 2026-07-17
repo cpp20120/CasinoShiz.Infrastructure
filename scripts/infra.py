@@ -140,7 +140,8 @@ def legacy_help(script_name: str) -> int:
 
 def main() -> int:
     parser = build_parser()
-    ns = parser.parse_args()
+    ns, unknown = parser.parse_known_args()
+
     key = (ns.group, ns.command)
     script_name, fixed_args = COMMANDS[key]
 
@@ -155,12 +156,15 @@ def main() -> int:
             ("local", "image-push"),
         }:
             return legacy_help(script_name)
-        parser.parse_args([ns.group, ns.command, "--help"])
+
+        parser.print_help()
         return 0
 
-    forwarded = list(ns.args)
+    forwarded = [*ns.args, *unknown]
+
     if fixed_args is not None:
         forwarded = [*fixed_args, *forwarded]
+
     return execute(script_name, forwarded)
 
 
