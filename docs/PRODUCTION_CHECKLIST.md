@@ -21,10 +21,10 @@
 
 ## GitOps
 
-- [ ] Flux is bootstrapped
-- [ ] Flux source is ready
-- [ ] all Kustomizations are ready
-- [ ] all HelmReleases are ready
+- [ ] Argo CD is bootstrapped
+- [ ] Argo CD source is ready
+- [ ] all Applications are ready
+- [ ] all Argo CD Applications are ready
 - [ ] no repeated reconciliation errors exist
 
 ## Security

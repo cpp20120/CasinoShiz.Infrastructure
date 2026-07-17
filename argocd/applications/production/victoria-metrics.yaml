@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: victoria-metrics
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  project: casinoshiz
+  source:
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    chart: victoria-metrics-k8s-stack
+    targetRevision: '*'
+    helm:
+      releaseName: victoria-metrics-k8s-stack
+      valuesObject:
+        nameOverride: vmks
+        vmsingle:
+          enabled: true
+          spec:
+            retentionPeriod: 14d
+            storage:
+              accessModes: [ReadWriteOnce]
+              storageClassName: local-path
+              resources:
+                requests:
+                  storage: 20Gi
+        vmcluster:
+          enabled: false
+        vmalert:
+          enabled: true
+        alertmanager:
+          enabled: true
+        grafana:
+          enabled: true
+          persistence:
+            enabled: true
+            storageClassName: local-path
+            size: 5Gi
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-production
+            hosts: [grafana.CHANGE_ME]
+            tls:
+              - secretName: grafana-tls
+                hosts: [grafana.CHANGE_ME]
+          additionalDataSources:
+            - name: Tempo
+              type: tempo
+              access: proxy
+              url: http://tempo.observability.svc.cluster.local:3100
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true

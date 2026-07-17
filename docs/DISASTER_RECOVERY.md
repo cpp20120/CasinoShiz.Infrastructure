@@ -19,7 +19,7 @@ These are targets, not guarantees, until restore tests have been completed.
 1. Provision a new VPS.
 2. Point the Ansible inventory to the new host.
 3. Run the Ansible bootstrap.
-4. Bootstrap Flux.
+4. Bootstrap Argo CD.
 5. Install the encrypted secrets.
 6. Wait for platform and data workloads.
 7. Download off-site backups.

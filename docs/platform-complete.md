@@ -39,5 +39,5 @@ through Ingress. Grafana accesses it through the cluster Service.
 1. Replace `CHANGE_ME` values.
 2. Run GitHub Actions successfully.
 3. Add encrypted secrets.
-4. Bootstrap Flux.
+4. Bootstrap Argo CD.
 5. Verify certificates, PVCs, scrape targets and backup Jobs.

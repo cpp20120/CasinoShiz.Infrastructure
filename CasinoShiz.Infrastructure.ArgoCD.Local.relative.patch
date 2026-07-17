@@ -1,0 +1,2533 @@
+diff -ruN '--exclude=.git' '--exclude=.task' a/README.md b/README.md
+--- a/README.md	2026-07-17 13:50:18.000000000 +0000
++++ b/README.md	2026-07-17 16:47:41.000000000 +0000
+@@ -7,7 +7,7 @@
+ * bootstrap single-node VPS;
+ * локальный k3d-кластер;
+ * k3s production cluster;
+-* Flux CD;
++* Argo CD;
+ * Helm chart приложения;
+ * stateful data services;
+ * observability;
+@@ -36,7 +36,7 @@
+ Ansible
+   └── bootstrap и настройка VPS/k3s
+ 
+-Flux CD
++Argo CD
+   └── постоянная GitOps reconciliation внутри Kubernetes
+ 
+ Helm
+@@ -62,7 +62,7 @@
+ Ansible
+   └── устанавливает и настраивает k3s на VPS
+ 
+-Flux
++Argo CD
+   └── читает Git и применяет manifests
+ 
+ k3s/containerd
+@@ -77,7 +77,7 @@
+ 
+ * k3s для production single-node VPS;
+ * k3d для локального Kubernetes-окружения;
+-* Flux CD;
++* Argo CD;
+ * staged reconciliation:
+ 
+   * platform;
+@@ -87,7 +87,7 @@
+ * Kustomize composition для production и local;
+ * локальный Docker registry для k3d;
+ * Taskfile для единых локальных и CI-команд;
+-* SOPS decryption через Flux;
++* SOPS decryption через Argo CD;
+ * production preflight и post-deploy checks;
+ * cluster status и diagnostics commands.
+ 
+@@ -102,7 +102,7 @@
+ * установку k3s;
+ * выбор ingress-профиля;
+ * конфигурацию systemd/k3s;
+-* подготовку хоста к Flux bootstrap.
++* подготовку хоста к Argo CD bootstrap.
+ 
+ Ansible запускается локально и конфигурирует удалённый VPS.
+ 
+@@ -126,7 +126,7 @@
+ Группы команд:
+ 
+ ```text
+-local     локальный k3d cluster, registry и Flux bootstrap
++local     локальный k3d cluster, registry и Argo CD bootstrap
+ sops      age/SOPS и генерация Secret manifests
+ cluster   preflight, status и post-deploy проверки
+ backup    ручной запуск backup Jobs
+@@ -510,7 +510,7 @@
+ 
+ * SOPS;
+ * age;
+-* Flux SOPS decryption.
++* Argo CD SOPS decryption.
+ 
+ Приватный age key хранится вне Git:
+ 
+@@ -595,9 +595,9 @@
+ 
+ Plaintext при проверке не выводится.
+ 
+-### Flux decryption
++### Argo CD decryption
+ 
+-В Flux Kustomization используется:
++В Argo CD Application используется:
+ 
+ ```yaml
+ spec:
+@@ -607,7 +607,7 @@
+       name: sops-age
+ ```
+ 
+-В namespace `flux-system` должен существовать Secret:
++В namespace `argocd` должен существовать Secret:
+ 
+ ```text
+ sops-age
+@@ -750,7 +750,7 @@
+ * Task;
+ * Ansible;
+ * k3d;
+-* Flux CLI;
++* Argo CD CLI;
+ * SOPS;
+ * age;
+ * Git;
+@@ -776,7 +776,7 @@
+   git
+ ```
+ 
+-`k3d` и `flux` устанавливаются отдельно через официальные installers или подходящие Arch/AUR packages.
++`k3d` и `helm` устанавливаются отдельно через официальные installers или подходящие Arch/AUR packages.
+ 
+ ---
+ 
+@@ -949,18 +949,18 @@
+ curl -fsS http://localhost:5005/v2/_catalog | jq
+ ```
+ 
+-### Local Flux bootstrap
++### Local Argo CD bootstrap
+ 
+ ```bash
+-python scripts/infra.py local flux-bootstrap
++python scripts/infra.py local argocd-bootstrap
+ ```
+ 
+ Проверить:
+ 
+ ```bash
+-flux get sources git -A
+-flux get kustomizations -A
+-flux get helmreleases -A
++kubectl get applications -n argocd
++kubectl get applications -n argocd
++kubectl get applications -n argocd
+ 
+ kubectl get pods -A
+ kubectl get pvc -A
+@@ -1038,7 +1038,7 @@
+ * repository URLs;
+ * domains;
+ * age key path;
+-* GitHub token для Flux bootstrap;
++* GitHub token для Argo CD bootstrap;
+ * image mapping для optional remote/local build mode.
+ 
+ Пример запуска:
+@@ -1059,8 +1059,8 @@
+ 5. запускает Ansible;
+ 6. устанавливает k3s;
+ 7. получает kubeconfig;
+-8. создаёт `flux-system/sops-age`;
+-9. bootstrap-ит Flux;
++8. создаёт `argocd/sops-age`;
++9. bootstrap-ит Argo CD;
+ 10. ждёт reconciliation;
+ 11. выполняет readiness checks.
+ 
+@@ -1074,7 +1074,7 @@
+ 5. Commit encrypted desired state
+ 6. Push в Git
+ 7. Запустить installer
+-8. Проверить Flux
++8. Проверить Argo CD
+ 9. Проверить Pods и PVC
+ 10. Запустить backup
+ 11. Запустить restore smoke test
+@@ -1148,7 +1148,7 @@
+ #### 9. Проверка кластера
+ 
+ ```bash
+-flux get all -A
++kubectl get applications -n argocd
+ kubectl get pods -A
+ kubectl get pvc -A
+ kubectl get events -A --sort-by=.lastTimestamp
+@@ -1220,11 +1220,11 @@
+ python scripts/infra.py cluster status
+ ```
+ 
+-Flux:
++Argo CD:
+ 
+ ```bash
+-flux get all -A
+-flux logs --all-namespaces --level=error
++kubectl get applications -n argocd
++kubectl logs -n argocd deployment/argocd-application-controller
+ ```
+ 
+ Pods:
+@@ -1291,7 +1291,7 @@
+ 
+ ```bash
+ kubectl get pods -A
+-flux get all -A
++kubectl get applications -n argocd
+ ```
+ 
+ Проверка NetworkPolicy:
+@@ -1356,7 +1356,7 @@
+ 
+ OpenTofu не требуется для управления текущим Kubernetes desired state.
+ 
+-Внутри кластера основным владельцем ресурсов остаётся Flux.
++Внутри кластера основным владельцем ресурсов остаётся Argo CD.
+ 
+ ---
+ 
+@@ -1370,12 +1370,12 @@
+ * GitHub Actions зелёный;
+ * SOPS Secrets зашифрованы;
+ * age private key сохранён вне Git;
+-* Flux `sops-age` Secret создан;
++* Argo CD `sops-age` Secret создан;
+ * application images опубликованы;
+ * GHCR pull Secret работает;
+ * DNS настроен;
+ * TLS certificates выпущены;
+-* Flux resources находятся в `Ready`;
++* Argo CD resources находятся в `Ready`;
+ * все Pods находятся в ожидаемом состоянии;
+ * все PVC находятся в `Bound`;
+ * manual backups проходят;
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/casinoshiz-secrets.yaml b/argocd/applications/local/casinoshiz-secrets.yaml
+--- a/argocd/applications/local/casinoshiz-secrets.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/casinoshiz-secrets.yaml	2026-07-17 18:53:04.574874052 +0000
+@@ -0,0 +1,21 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-casinoshiz-secrets
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "40"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: clusters/local/stages/app
++    plugin:
++      name: sops-kustomize-v1.0
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: casinoshiz
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/casinoshiz.yaml b/argocd/applications/local/casinoshiz.yaml
+--- a/argocd/applications/local/casinoshiz.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/casinoshiz.yaml	2026-07-17 18:53:04.581843296 +0000
+@@ -0,0 +1,22 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-casinoshiz
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "50"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: charts/casinoshiz
++    helm:
++      releaseName: casinoshiz
++      valueFiles: [values-local.yaml]
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: casinoshiz
++  syncPolicy:
++    automated: { prune: true, selfHeal: false }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/data.yaml b/argocd/applications/local/data.yaml
+--- a/argocd/applications/local/data.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/data.yaml	2026-07-17 18:53:04.566086898 +0000
+@@ -0,0 +1,21 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-data
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "30"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: clusters/local/stages/data
++    plugin:
++      name: sops-kustomize-v1.0
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: data
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/keda.yaml b/argocd/applications/local/keda.yaml
+--- a/argocd/applications/local/keda.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/keda.yaml	2026-07-17 18:53:03.299007228 +0000
+@@ -0,0 +1,21 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-keda
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "10"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://kedacore.github.io/charts
++    chart: keda
++    targetRevision: '*'
++    helm:
++      releaseName: keda
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: keda
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/namespaces.yaml b/argocd/applications/local/namespaces.yaml
+--- a/argocd/applications/local/namespaces.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/namespaces.yaml	2026-07-17 18:53:03.291621358 +0000
+@@ -0,0 +1,19 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-namespaces
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "0"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: platform/namespaces
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: default
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/otel-collector.yaml b/argocd/applications/local/otel-collector.yaml
+--- a/argocd/applications/local/otel-collector.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/otel-collector.yaml	2026-07-17 18:53:04.431093008 +0000
+@@ -0,0 +1,63 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-otel-collector
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "40"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
++    chart: opentelemetry-collector
++    targetRevision: '*'
++    helm:
++      releaseName: opentelemetry-collector
++      valuesObject:
++        mode: deployment
++        replicaCount: 1
++        image:
++          repository: otel/opentelemetry-collector-contrib
++        command:
++          name: otelcol-contrib
++        config:
++          receivers:
++            otlp:
++              protocols:
++                grpc:
++                  endpoint: 0.0.0.0:4317
++                http:
++                  endpoint: 0.0.0.0:4318
++          processors:
++            memory_limiter:
++              check_interval: 5s
++              limit_percentage: 75
++              spike_limit_percentage: 15
++            batch: {}
++          exporters:
++            otlp/tempo:
++              endpoint: tempo.observability.svc.cluster.local:4317
++              tls:
++                insecure: true
++          service:
++            pipelines:
++              traces:
++                receivers: [otlp]
++                processors: [memory_limiter, batch]
++                exporters: [otlp/tempo]
++        ports:
++          otlp:
++            enabled: true
++          otlp-http:
++            enabled: true
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: observability
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/tempo.yaml b/argocd/applications/local/tempo.yaml
+--- a/argocd/applications/local/tempo.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/tempo.yaml	2026-07-17 18:53:03.313215375 +0000
+@@ -0,0 +1,37 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-tempo
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "20"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://grafana-community.github.io/helm-charts
++    chart: tempo
++    targetRevision: '*'
++    helm:
++      releaseName: tempo
++      valuesObject:
++        replicas: 1
++        tempo:
++          reportingEnabled: false
++          retention: 24h
++          receivers:
++            otlp:
++              protocols:
++                grpc: { endpoint: 0.0.0.0:4317 }
++                http: { endpoint: 0.0.0.0:4318 }
++          storage:
++            trace:
++              backend: local
++              local: { path: /var/tempo/traces }
++              wal: { path: /var/tempo/wal }
++        persistence: { enabled: false }
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: observability
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/local/victoria-metrics.yaml b/argocd/applications/local/victoria-metrics.yaml
+--- a/argocd/applications/local/victoria-metrics.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/local/victoria-metrics.yaml	2026-07-17 18:53:03.306198951 +0000
+@@ -0,0 +1,41 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: local-victoria-metrics
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "20"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://victoriametrics.github.io/helm-charts/
++    chart: victoria-metrics-k8s-stack
++    targetRevision: '*'
++    helm:
++      releaseName: vmks
++      valuesObject:
++        vmsingle:
++          enabled: true
++          spec:
++            retentionPeriod: 1d
++            storage:
++              accessModes: [ReadWriteOnce]
++              storageClassName: local-path
++              resources:
++                requests: { storage: 2Gi }
++        vmcluster: { enabled: false }
++        vmalert: { enabled: false }
++        alertmanager: { enabled: false }
++        grafana:
++          enabled: true
++          persistence: { enabled: false }
++          ingress:
++            enabled: true
++            ingressClassName: traefik
++            hosts: [grafana.casinoshiz.localhost]
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: monitoring
++  syncPolicy:
++    automated: { prune: true, selfHeal: true }
++    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/casinoshiz-secrets.yaml b/argocd/applications/production/casinoshiz-secrets.yaml
+--- a/argocd/applications/production/casinoshiz-secrets.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/casinoshiz-secrets.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,26 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: casinoshiz-secrets
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "55"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: clusters/production/casinoshiz
++    plugin:
++      name: sops-kustomize-v1.0
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: casinoshiz
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/casinoshiz.yaml b/argocd/applications/production/casinoshiz.yaml
+--- a/argocd/applications/production/casinoshiz.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/casinoshiz.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,28 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: casinoshiz
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "60"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: charts/casinoshiz
++    helm:
++      releaseName: casinoshiz
++      valueFiles:
++        - values-production.yaml
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: casinoshiz
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/cert-manager.yaml b/argocd/applications/production/cert-manager.yaml
+--- a/argocd/applications/production/cert-manager.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/cert-manager.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,29 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: cert-manager
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "10"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://charts.jetstack.io
++    chart: cert-manager
++    targetRevision: '*'
++    helm:
++      releaseName: cert-manager
++      valuesObject:
++        crds:
++          enabled: true
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: cert-manager
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/cluster-issuer.yaml b/argocd/applications/production/cluster-issuer.yaml
+--- a/argocd/applications/production/cluster-issuer.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/cluster-issuer.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,24 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: cluster-issuer
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "20"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: platform/cert-manager
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: cert-manager
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/data.yaml b/argocd/applications/production/data.yaml
+--- a/argocd/applications/production/data.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/data.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,26 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: data
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "40"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: data
++    plugin:
++      name: sops-kustomize-v1.0
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: data
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/keda.yaml b/argocd/applications/production/keda.yaml
+--- a/argocd/applications/production/keda.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/keda.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,33 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: keda
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "10"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://kedacore.github.io/charts
++    chart: keda
++    targetRevision: '*'
++    helm:
++      releaseName: keda
++      valuesObject:
++        operator:
++          replicaCount: 1
++        metricsServer:
++          replicaCount: 1
++        webhooks:
++          replicaCount: 1
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: keda
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/monitoring-rules.yaml b/argocd/applications/production/monitoring-rules.yaml
+--- a/argocd/applications/production/monitoring-rules.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/monitoring-rules.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,24 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: monitoring-rules
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "40"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: platform/monitoring
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: monitoring
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/namespaces.yaml b/argocd/applications/production/namespaces.yaml
+--- a/argocd/applications/production/namespaces.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/namespaces.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,24 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: namespaces
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "0"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: platform/namespaces
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: default
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/network-policies.yaml b/argocd/applications/production/network-policies.yaml
+--- a/argocd/applications/production/network-policies.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/network-policies.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,24 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: network-policies
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "50"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: platform/network-policies
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: default
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/otel-collector.yaml b/argocd/applications/production/otel-collector.yaml
+--- a/argocd/applications/production/otel-collector.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/otel-collector.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,63 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: otel-collector
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "40"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
++    chart: opentelemetry-collector
++    targetRevision: '*'
++    helm:
++      releaseName: opentelemetry-collector
++      valuesObject:
++        mode: deployment
++        replicaCount: 1
++        image:
++          repository: otel/opentelemetry-collector-contrib
++        command:
++          name: otelcol-contrib
++        config:
++          receivers:
++            otlp:
++              protocols:
++                grpc:
++                  endpoint: 0.0.0.0:4317
++                http:
++                  endpoint: 0.0.0.0:4318
++          processors:
++            memory_limiter:
++              check_interval: 5s
++              limit_percentage: 75
++              spike_limit_percentage: 15
++            batch: {}
++          exporters:
++            otlp/tempo:
++              endpoint: tempo.observability.svc.cluster.local:4317
++              tls:
++                insecure: true
++          service:
++            pipelines:
++              traces:
++                receivers: [otlp]
++                processors: [memory_limiter, batch]
++                exporters: [otlp/tempo]
++        ports:
++          otlp:
++            enabled: true
++          otlp-http:
++            enabled: true
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: observability
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/tempo.yaml b/argocd/applications/production/tempo.yaml
+--- a/argocd/applications/production/tempo.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/tempo.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,49 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: tempo
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "30"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://grafana-community.github.io/helm-charts
++    chart: tempo
++    targetRevision: '*'
++    helm:
++      releaseName: tempo
++      valuesObject:
++        replicas: 1
++        tempo:
++          reportingEnabled: false
++          retention: 168h
++          receivers:
++            otlp:
++              protocols:
++                grpc:
++                  endpoint: 0.0.0.0:4317
++                http:
++                  endpoint: 0.0.0.0:4318
++          storage:
++            trace:
++              backend: local
++              local:
++                path: /var/tempo/traces
++              wal:
++                path: /var/tempo/wal
++        persistence:
++          enabled: true
++          storageClassName: local-path
++          size: 20Gi
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: observability
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/applications/production/victoria-metrics.yaml b/argocd/applications/production/victoria-metrics.yaml
+--- a/argocd/applications/production/victoria-metrics.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/applications/production/victoria-metrics.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,64 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: victoria-metrics
++  namespace: argocd
++  annotations:
++    argocd.argoproj.io/sync-wave: "30"
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://victoriametrics.github.io/helm-charts/
++    chart: victoria-metrics-k8s-stack
++    targetRevision: '*'
++    helm:
++      releaseName: victoria-metrics-k8s-stack
++      valuesObject:
++        nameOverride: vmks
++        vmsingle:
++          enabled: true
++          spec:
++            retentionPeriod: 14d
++            storage:
++              accessModes: [ReadWriteOnce]
++              storageClassName: local-path
++              resources:
++                requests:
++                  storage: 20Gi
++        vmcluster:
++          enabled: false
++        vmalert:
++          enabled: true
++        alertmanager:
++          enabled: true
++        grafana:
++          enabled: true
++          persistence:
++            enabled: true
++            storageClassName: local-path
++            size: 5Gi
++          ingress:
++            enabled: true
++            ingressClassName: traefik
++            annotations:
++              cert-manager.io/cluster-issuer: letsencrypt-production
++            hosts: [grafana.CHANGE_ME]
++            tls:
++              - secretName: grafana-tls
++                hosts: [grafana.CHANGE_ME]
++          additionalDataSources:
++            - name: Tempo
++              type: tempo
++              access: proxy
++              url: http://tempo.observability.svc.cluster.local:3100
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: monitoring
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/cmp-plugin.yaml b/argocd/cmp-plugin.yaml
+--- a/argocd/cmp-plugin.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/cmp-plugin.yaml	2026-07-17 16:48:04.000000000 +0000
+@@ -0,0 +1,30 @@
++apiVersion: v1
++kind: ConfigMap
++metadata:
++  name: argocd-cmp-sops-kustomize
++  namespace: argocd
++data:
++  plugin.yaml: |
++    apiVersion: argoproj.io/v1alpha1
++    kind: ConfigManagementPlugin
++    metadata:
++      name: sops-kustomize
++    spec:
++      version: v1.0
++      discover:
++        fileName: kustomization.yaml
++      generate:
++        command: [/bin/sh, -ec]
++        args:
++          - |
++            workdir=$(mktemp -d)
++            trap 'rm -rf "$workdir"' EXIT
++            cp -a . "$workdir/repo"
++            find "$workdir/repo" -type f \( -name '*.secret.yaml' -o -name '*.secret.yml' \) -exec sh -ec '
++              for file do
++                sops --decrypt --output "$file.dec" "$file"
++                mv "$file.dec" "$file"
++              done
++            ' sh {} +
++            cd "$workdir/repo"
++            kustomize build .
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/namespace.yaml b/argocd/namespace.yaml
+--- a/argocd/namespace.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/namespace.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,4 @@
++apiVersion: v1
++kind: Namespace
++metadata:
++  name: argocd
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/project.yaml b/argocd/project.yaml
+--- a/argocd/project.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/project.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,15 @@
++apiVersion: argoproj.io/v1alpha1
++kind: AppProject
++metadata:
++  name: casinoshiz
++  namespace: argocd
++spec:
++  description: CasinoShiz platform and application
++  sourceRepos:
++    - '*'
++  destinations:
++    - namespace: '*'
++      server: https://kubernetes.default.svc
++  clusterResourceWhitelist:
++    - group: '*'
++      kind: '*'
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/root-application.yaml b/argocd/root-application.yaml
+--- a/argocd/root-application.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/root-application.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,23 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: casinoshiz-production
++  namespace: argocd
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: argocd/applications/production
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: argocd
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++      allowEmpty: false
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
++      - ServerSideApply=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/root-local.yaml b/argocd/root-local.yaml
+--- a/argocd/root-local.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/root-local.yaml	2026-07-17 18:53:03.277177732 +0000
+@@ -0,0 +1,23 @@
++apiVersion: argoproj.io/v1alpha1
++kind: Application
++metadata:
++  name: casinoshiz-local
++  namespace: argocd
++  finalizers:
++    - resources-finalizer.argocd.argoproj.io
++spec:
++  project: casinoshiz
++  source:
++    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
++    targetRevision: main
++    path: argocd/applications/local
++  destination:
++    server: https://kubernetes.default.svc
++    namespace: argocd
++  syncPolicy:
++    automated:
++      prune: true
++      selfHeal: true
++    syncOptions:
++      - CreateNamespace=true
++      - PruneLast=true
+diff -ruN '--exclude=.git' '--exclude=.task' a/argocd/values.yaml b/argocd/values.yaml
+--- a/argocd/values.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/argocd/values.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -0,0 +1,64 @@
++global:
++  domain: argocd.CHANGE_ME
++configs:
++  params:
++    server.insecure: true
++server:
++  ingress:
++    enabled: true
++    ingressClassName: traefik
++    annotations:
++      cert-manager.io/cluster-issuer: letsencrypt-production
++    hostname: argocd.CHANGE_ME
++    tls: true
++repoServer:
++  volumes:
++    - name: cmp-plugin
++      configMap:
++        name: argocd-cmp-sops-kustomize
++    - name: sops-age
++      secret:
++        secretName: sops-age
++    - name: custom-tools
++      emptyDir: {}
++  initContainers:
++    - name: install-tools
++      image: alpine:3.22
++      command: [/bin/sh, -ec]
++      args:
++        - |
++          apk add --no-cache curl tar
++          curl -fsSL https://github.com/getsops/sops/releases/download/v3.10.2/sops-v3.10.2.linux.amd64 -o /custom-tools/sops
++          chmod +x /custom-tools/sops
++          curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.7.1/kustomize_v5.7.1_linux_amd64.tar.gz | tar -xz -C /custom-tools
++      volumeMounts:
++        - name: custom-tools
++          mountPath: /custom-tools
++  extraContainers:
++    - name: cmp-sops-kustomize
++      command: [/var/run/argocd/argocd-cmp-server]
++      image: quay.io/argoproj/argocd:v3.1.7
++      securityContext:
++        runAsNonRoot: true
++        runAsUser: 999
++      env:
++        - name: SOPS_AGE_KEY_FILE
++          value: /sops-age/keys.txt
++        - name: PATH
++          value: /custom-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++      volumeMounts:
++        - name: var-files
++          mountPath: /var/run/argocd
++        - name: plugins
++          mountPath: /home/argocd/cmp-server/plugins
++        - name: cmp-tmp
++          mountPath: /tmp
++        - name: cmp-plugin
++          mountPath: /home/argocd/cmp-server/config/plugin.yaml
++          subPath: plugin.yaml
++        - name: sops-age
++          mountPath: /sops-age
++          readOnly: true
++        - name: custom-tools
++          mountPath: /custom-tools
++          readOnly: true
+diff -ruN '--exclude=.git' '--exclude=.task' a/charts/casinoshiz/values-local.yaml b/charts/casinoshiz/values-local.yaml
+--- a/charts/casinoshiz/values-local.yaml	1970-01-01 00:00:00.000000000 +0000
++++ b/charts/casinoshiz/values-local.yaml	2026-07-17 18:53:03.284340366 +0000
+@@ -0,0 +1,48 @@
++global:
++  imageRegistry: k3d-casinoshiz-registry.localhost:5000
++  imagePullPolicy: Always
++  minioEndpoint: minio.data.svc.cluster.local:9000
++
++ingress:
++  enabled: true
++  className: traefik
++  clusterIssuer: ""
++
++monitoring:
++  enabled: true
++
++frontend:
++  host: app.casinoshiz.localhost
++  image:
++    repository: casinoshiz-frontend
++    tag: local
++
++backendImage:
++  repository: casinoshiz-backend
++  tag: local
++
++services:
++  identity:
++    image: { repository: casinoshiz-identity, tag: local }
++    autoscaling: false
++  wallet:
++    image: { repository: casinoshiz-wallet, tag: local }
++    autoscaling: false
++  telegram-bff:
++    image: { repository: casinoshiz-telegram-bff, tag: local }
++    host: tg.casinoshiz.localhost
++    autoscaling: false
++  discord-bff:
++    image: { repository: casinoshiz-discord-bff, tag: local }
++    autoscaling: false
++  admin-bff:
++    image: { repository: casinoshiz-admin-bff, tag: local }
++    host: admin.casinoshiz.localhost
++    autoscaling: false
++  rest-api:
++    image: { repository: casinoshiz-rest-api, tag: local }
++    host: api.casinoshiz.localhost
++    autoscaling: false
++
++autoscaling:
++  enabled: false
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/bootstrap/app.yaml b/clusters/local/bootstrap/app.yaml
+--- a/clusters/local/bootstrap/app.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/bootstrap/app.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,22 +0,0 @@
+-apiVersion: kustomize.toolkit.fluxcd.io/v1
+-kind: Kustomization
+-metadata:
+-  name: casinoshiz-local-app
+-  namespace: flux-system
+-spec:
+-  dependsOn:
+-    - name: casinoshiz-local-data
+-  interval: 5m
+-  retryInterval: 30s
+-  timeout: 20m
+-  prune: true
+-  wait: true
+-  sourceRef:
+-    kind: GitRepository
+-    name: casinoshiz-infrastructure
+-  path: ./clusters/local/stages/app
+-
+-  decryption:
+-    provider: sops
+-    secretRef:
+-      name: sops-age
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/bootstrap/data.yaml b/clusters/local/bootstrap/data.yaml
+--- a/clusters/local/bootstrap/data.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/bootstrap/data.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,22 +0,0 @@
+-apiVersion: kustomize.toolkit.fluxcd.io/v1
+-kind: Kustomization
+-metadata:
+-  name: casinoshiz-local-data
+-  namespace: flux-system
+-spec:
+-  dependsOn:
+-    - name: casinoshiz-local-platform
+-  interval: 5m
+-  retryInterval: 30s
+-  timeout: 20m
+-  prune: true
+-  wait: true
+-  sourceRef:
+-    kind: GitRepository
+-    name: casinoshiz-infrastructure
+-  path: ./clusters/local/stages/data
+-
+-  decryption:
+-    provider: sops
+-    secretRef:
+-      name: sops-age
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/bootstrap/kustomization.yaml b/clusters/local/bootstrap/kustomization.yaml
+--- a/clusters/local/bootstrap/kustomization.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/bootstrap/kustomization.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,7 +0,0 @@
+-apiVersion: kustomize.config.k8s.io/v1beta1
+-kind: Kustomization
+-resources:
+-  - source.yaml
+-  - platform.yaml
+-  - data.yaml
+-  - app.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/bootstrap/platform.yaml b/clusters/local/bootstrap/platform.yaml
+--- a/clusters/local/bootstrap/platform.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/bootstrap/platform.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,20 +0,0 @@
+-apiVersion: kustomize.toolkit.fluxcd.io/v1
+-kind: Kustomization
+-metadata:
+-  name: casinoshiz-local-platform
+-  namespace: flux-system
+-spec:
+-  interval: 5m
+-  retryInterval: 30s
+-  timeout: 15m
+-  prune: true
+-  wait: true
+-  sourceRef:
+-    kind: GitRepository
+-    name: casinoshiz-infrastructure
+-  path: ./clusters/local/stages/platform
+-
+-  decryption:
+-    provider: sops
+-    secretRef:
+-      name: sops-age
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/bootstrap/source.yaml b/clusters/local/bootstrap/source.yaml
+--- a/clusters/local/bootstrap/source.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/bootstrap/source.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,10 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: GitRepository
+-metadata:
+-  name: casinoshiz-infrastructure
+-  namespace: flux-system
+-spec:
+-  interval: 1m
+-  url: https://github.com/cpp20120/CasinoShiz.Infrastructure
+-  ref:
+-    branch: main
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/app/helmrelease.yaml b/clusters/local/stages/app/helmrelease.yaml
+--- a/clusters/local/stages/app/helmrelease.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/stages/app/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,18 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: casinoshiz
+-  namespace: casinoshiz
+-spec:
+-  interval: 2m
+-  chart:
+-    spec:
+-      chart: ./charts/casinoshiz
+-      sourceRef:
+-        kind: GitRepository
+-        name: casinoshiz-infrastructure
+-        namespace: flux-system
+-  valuesFrom:
+-    - kind: ConfigMap
+-      name: casinoshiz-local-values
+-      valuesKey: values.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/app/kustomization.yaml b/clusters/local/stages/app/kustomization.yaml
+--- a/clusters/local/stages/app/kustomization.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/stages/app/kustomization.yaml	2026-07-17 16:48:18.000000000 +0000
+@@ -2,6 +2,4 @@
+ kind: Kustomization
+ resources:
+   - namespace.yaml
+-  - values-configmap.yaml
+   - casinoshiz.secret.yaml
+-  - helmrelease.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/app/values-configmap.yaml b/clusters/local/stages/app/values-configmap.yaml
+--- a/clusters/local/stages/app/values-configmap.yaml	2026-07-17 13:50:18.000000000 +0000
++++ b/clusters/local/stages/app/values-configmap.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,56 +0,0 @@
+-apiVersion: v1
+-kind: ConfigMap
+-metadata:
+-  name: casinoshiz-local-values
+-  namespace: casinoshiz
+-data:
+-  values.yaml: |
+-    global:
+-      imageRegistry: k3d-casinoshiz-registry.localhost:5000
+-      imagePullPolicy: Always
+-
+-    monitoring:
+-      enabled: true
+-
+-    ingress:
+-      enabled: false
+-
+-    frontend:
+-      enabled: true
+-      image:
+-        repository: casinoshiz-frontend
+-        tag: local
+-
+-    backendImage:
+-      repository: casinoshiz-backend
+-      tag: local
+-
+-    services:
+-      identity:
+-        image:
+-          repository: casinoshiz-identity
+-          tag: local
+-      wallet:
+-        image:
+-          repository: casinoshiz-wallet
+-          tag: local
+-      telegram-bff:
+-        image:
+-          repository: casinoshiz-telegram-bff
+-          tag: local
+-        public: false
+-      discord-bff:
+-        enabled: false
+-      admin-bff:
+-        image:
+-          repository: casinoshiz-admin-bff
+-          tag: local
+-        public: false
+-      rest-api:
+-        image:
+-          repository: casinoshiz-rest-api
+-          tag: local
+-        public: false
+-
+-    autoscaling:
+-      enabled: false
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/platform/monitoring/helmrelease.yaml b/clusters/local/stages/platform/monitoring/helmrelease.yaml
+--- a/clusters/local/stages/platform/monitoring/helmrelease.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/stages/platform/monitoring/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,50 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: victoria-metrics
+-  namespace: monitoring
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: victoria-metrics-k8s-stack
+-      sourceRef:
+-        kind: HelmRepository
+-        name: victoria-metrics-local
+-        namespace: flux-system
+-  values:
+-    nameOverride: vmks
+-    vmsingle:
+-      enabled: true
+-      spec:
+-        retentionPeriod: "2d"
+-        storage:
+-          accessModes:
+-            - ReadWriteOnce
+-          storageClassName: local-path
+-          resources:
+-            requests:
+-              storage: 5Gi
+-    vmcluster:
+-      enabled: false
+-    vmagent:
+-      spec:
+-        scrapeInterval: 30s
+-    vmalert:
+-      enabled: true
+-    alertmanager:
+-      enabled: true
+-    grafana:
+-      enabled: true
+-      persistence:
+-        enabled: true
+-        storageClassName: local-path
+-        size: 2Gi
+-      ingress:
+-        enabled: false
+-      additionalDataSources:
+-        - name: Tempo
+-          type: tempo
+-          access: proxy
+-          url: http://tempo.observability.svc.cluster.local:3100
+-          isDefault: false
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/platform/monitoring/helmrepository.yaml b/clusters/local/stages/platform/monitoring/helmrepository.yaml
+--- a/clusters/local/stages/platform/monitoring/helmrepository.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/stages/platform/monitoring/helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: victoria-metrics-local
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://victoriametrics.github.io/helm-charts/
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/local/stages/platform/monitoring/kustomization.yaml b/clusters/local/stages/platform/monitoring/kustomization.yaml
+--- a/clusters/local/stages/platform/monitoring/kustomization.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/clusters/local/stages/platform/monitoring/kustomization.yaml	2026-07-17 16:48:18.000000000 +0000
+@@ -1,5 +1,3 @@
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+-resources:
+-  - helmrepository.yaml
+-  - helmrelease.yaml
++resources: []
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/production/casinoshiz/helmrelease.yaml b/clusters/production/casinoshiz/helmrelease.yaml
+--- a/clusters/production/casinoshiz/helmrelease.yaml	2026-07-17 01:42:16.000000000 +0000
++++ b/clusters/production/casinoshiz/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,18 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: casinoshiz
+-  namespace: casinoshiz
+-spec:
+-  interval: 10m
+-  chart:
+-    spec:
+-      chart: ./charts/casinoshiz
+-      sourceRef:
+-        kind: GitRepository
+-        name: flux-system
+-        namespace: flux-system
+-  valuesFrom:
+-    - kind: ConfigMap
+-      name: casinoshiz-production-values
+-      valuesKey: values.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/production/casinoshiz/kustomization.yaml b/clusters/production/casinoshiz/kustomization.yaml
+--- a/clusters/production/casinoshiz/kustomization.yaml	2026-07-17 01:42:16.000000000 +0000
++++ b/clusters/production/casinoshiz/kustomization.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -2,5 +2,3 @@
+ kind: Kustomization
+ resources:
+   - namespace.yaml
+-  - values-configmap.yaml
+-  - helmrelease.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/clusters/production/casinoshiz/values-configmap.yaml b/clusters/production/casinoshiz/values-configmap.yaml
+--- a/clusters/production/casinoshiz/values-configmap.yaml	2026-07-17 01:51:04.000000000 +0000
++++ b/clusters/production/casinoshiz/values-configmap.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,48 +0,0 @@
+-apiVersion: v1
+-kind: ConfigMap
+-metadata:
+-  name: casinoshiz-production-values
+-  namespace: casinoshiz
+-data:
+-  values.yaml: |
+-    global:
+-      imageRegistry: ghcr.io/cpp20120
+-
+-    backendImage:
+-      repository: casinoshiz-backend
+-      tag: CHANGE_ME
+-
+-    services:
+-      identity:
+-        image:
+-          repository: casinoshiz-identity
+-          tag: CHANGE_ME
+-      wallet:
+-        image:
+-          repository: casinoshiz-wallet
+-          tag: CHANGE_ME
+-      telegram-bff:
+-        image:
+-          repository: casinoshiz-telegram-bff
+-          tag: CHANGE_ME
+-        host: tg.CHANGE_ME
+-      discord-bff:
+-        image:
+-          repository: casinoshiz-discord-bff
+-          tag: CHANGE_ME
+-      admin-bff:
+-        image:
+-          repository: casinoshiz-admin-bff
+-          tag: CHANGE_ME
+-        host: admin.CHANGE_ME
+-      rest-api:
+-        image:
+-          repository: casinoshiz-rest-api
+-          tag: CHANGE_ME
+-        host: api.CHANGE_ME
+-
+-    autoscaling:
+-      enabled: true
+-      minReplicas: 1
+-      maxReplicas: 4
+-      targetCPUUtilizationPercentage: 65
+diff -ruN '--exclude=.git' '--exclude=.task' a/deploy/installer.example.toml b/deploy/installer.example.toml
+--- a/deploy/installer.example.toml	1979-12-31 17:00:00.000000000 +0000
++++ b/deploy/installer.example.toml	2026-07-17 16:46:52.000000000 +0000
+@@ -17,7 +17,7 @@
+ ingress_profile = "traefik"
+ environment = "production"
+ run_ansible = true
+-bootstrap_flux = true
++bootstrap_argocd = true
+ clone_application = true
+ build_application_images = false
+ wait_timeout_seconds = 1200
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/DISASTER_RECOVERY.md b/docs/DISASTER_RECOVERY.md
+--- a/docs/DISASTER_RECOVERY.md	1979-12-31 17:00:00.000000000 +0000
++++ b/docs/DISASTER_RECOVERY.md	2026-07-17 16:46:52.000000000 +0000
+@@ -19,7 +19,7 @@
+ 1. Provision a new VPS.
+ 2. Point the Ansible inventory to the new host.
+ 3. Run the Ansible bootstrap.
+-4. Bootstrap Flux.
++4. Bootstrap Argo CD.
+ 5. Install the encrypted secrets.
+ 6. Wait for platform and data workloads.
+ 7. Download off-site backups.
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+--- a/docs/OPERATIONS.md	2026-07-17 02:19:32.000000000 +0000
++++ b/docs/OPERATIONS.md	2026-07-17 16:47:41.000000000 +0000
+@@ -9,7 +9,7 @@
+ 
+ - host bootstrap with Ansible;
+ - single-node k3s;
+-- Flux-compatible GitOps repository structure;
++- Argo CD-compatible GitOps repository structure;
+ - Traefik ingress supplied by k3s;
+ - cert-manager and Let's Encrypt ClusterIssuer bootstrap;
+ - application Helm chart;
+@@ -72,7 +72,7 @@
+ Infrastructure ownership is split as follows:
+ 
+ - **Ansible** owns the operating system and k3s installation.
+-- **Flux** owns Kubernetes resources.
++- **Argo CD** owns Kubernetes resources.
+ - **Helm** renders CasinoShiz application workloads.
+ - **Kustomize** composes the production cluster tree.
+ - **SOPS + age** will own encrypted secrets.
+@@ -119,9 +119,9 @@
+ | Path | Purpose |
+ |---|---|
+ | `ansible/playbooks/site.yml` | Prepare the VPS and install k3s |
+-| `clusters/production/kustomization.yaml` | Production Flux entrypoint |
++| `clusters/production/kustomization.yaml` | Production Argo CD entrypoint |
+ | `charts/casinoshiz/values-production.yaml` | Production application values |
+-| `clusters/production/casinoshiz/values-configmap.yaml` | Values consumed by Flux HelmRelease |
++| `clusters/production/casinoshiz/values-configmap.yaml` | Values consumed by Argo CD Application |
+ | `data/data.secret.yaml.example` | Data secret example |
+ | `clusters/production/casinoshiz/casinoshiz.secret.yaml.example` | Application secret example |
+ | `platform/monitoring/helmrelease.yaml` | VictoriaMetrics and Grafana |
+@@ -143,13 +143,13 @@
+   kubectl
+ ```
+ 
+-Flux, SOPS and age are required for the final deployment stage:
++Argo CD, SOPS and age are required for the final deployment stage:
+ 
+ ```bash
+ sudo pacman -S sops age
+ ```
+ 
+-Install the Flux CLI using its official installation method or an appropriate
++Install the Argo CD CLI using its official installation method or an appropriate
+ distribution package.
+ 
+ Verify tools:
+@@ -326,9 +326,9 @@
+ 
+ ---
+ 
+-## Flux bootstrap
++## Argo CD bootstrap
+ 
+-Flux should reconcile:
++Argo CD should reconcile:
+ 
+ ```text
+ clusters/production
+@@ -339,18 +339,13 @@
+ ```bash
+ export GITHUB_TOKEN=...
+ 
+-flux bootstrap github \
+-  --owner=cpp20120 \
+-  --repository=CasinoShiz.Infrastructure \
+-  --branch=main \
+-  --path=clusters/production \
+-  --personal
++python scripts/installer.py --config deploy/installer.toml
+ ```
+ 
+ After bootstrap:
+ 
+ ```bash
+-flux get all -A
++kubectl get applications -n argocd
+ kubectl get helmreleases -A
+ kubectl get kustomizations -A
+ ```
+@@ -694,11 +689,11 @@
+ 
+ ## Common diagnostics
+ 
+-### Flux
++### Argo CD
+ 
+ ```bash
+-flux get all -A
+-flux logs --all-namespaces --level=error
++kubectl get applications -n argocd
++kubectl logs -n argocd deployment/argocd-application-controller
+ ```
+ 
+ ### Pods
+@@ -710,7 +705,7 @@
+ kubectl logs <pod> -n <namespace> --previous
+ ```
+ 
+-### HelmRelease
++### Application
+ 
+ ```bash
+ kubectl get helmreleases -A
+@@ -772,9 +767,9 @@
+ 
+ ### GitOps
+ 
+-- [ ] Flux bootstrap succeeds.
+-- [ ] All Flux Kustomizations are ready.
+-- [ ] All HelmReleases are ready.
++- [ ] Argo CD bootstrap succeeds.
++- [ ] All Argo CD Applications are ready.
++- [ ] All Argo CD Applications are ready.
+ - [ ] cert-manager ClusterIssuer is ready.
+ - [ ] TLS certificates are issued.
+ 
+@@ -834,7 +829,7 @@
+ 3. SOPS-encrypted secrets exist;
+ 4. DNS records resolve to the VPS;
+ 5. application images exist in GHCR;
+-6. Flux reconciles successfully;
++6. Argo CD reconciles successfully;
+ 7. backups and at least one restore are tested.
+ 
+ Until all seven conditions are satisfied, the repository is a complete
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/PRODUCTION_CHECKLIST.md b/docs/PRODUCTION_CHECKLIST.md
+--- a/docs/PRODUCTION_CHECKLIST.md	1979-12-31 17:00:00.000000000 +0000
++++ b/docs/PRODUCTION_CHECKLIST.md	2026-07-17 16:46:52.000000000 +0000
+@@ -21,10 +21,10 @@
+ 
+ ## GitOps
+ 
+-- [ ] Flux is bootstrapped
+-- [ ] Flux source is ready
+-- [ ] all Kustomizations are ready
+-- [ ] all HelmReleases are ready
++- [ ] Argo CD is bootstrapped
++- [ ] Argo CD source is ready
++- [ ] all Applications are ready
++- [ ] all Argo CD Applications are ready
+ - [ ] no repeated reconciliation errors exist
+ 
+ ## Security
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/RUNBOOKS.md b/docs/RUNBOOKS.md
+--- a/docs/RUNBOOKS.md	1979-12-31 17:00:00.000000000 +0000
++++ b/docs/RUNBOOKS.md	2026-07-17 16:46:52.000000000 +0000
+@@ -3,8 +3,8 @@
+ ## Deployment does not reconcile
+ 
+ ```bash
+-flux get all -A
+-flux logs --all-namespaces --level=error
++kubectl get applications -n argocd
++kubectl logs -n argocd deployment/argocd-application-controller
+ kubectl get kustomizations -A
+ kubectl get helmreleases -A
+ ```
+@@ -113,12 +113,12 @@
+ kubectl scale deployment --all   -n casinoshiz   --replicas=0
+ ```
+ 
+-Reconcile Git before relying on this as a lasting state, otherwise Flux may
++Reconcile Git before relying on this as a lasting state, otherwise Argo CD may
+ restore the declared replica counts.
+ 
+ ## Emergency rollback
+ 
+-Prefer changing image tags in Git and allowing Flux to reconcile.
++Prefer changing image tags in Git and allowing Argo CD to reconcile.
+ 
+ For temporary diagnosis:
+ 
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/SOPS.md b/docs/SOPS.md
+--- a/docs/SOPS.md	1979-12-31 17:00:00.000000000 +0000
++++ b/docs/SOPS.md	2026-07-17 16:46:52.000000000 +0000
+@@ -70,17 +70,17 @@
+ 
+ It sends decrypted output to `/dev/null` and does not print plaintext.
+ 
+-## Flux bootstrap
++## Argo CD bootstrap
+ 
+ The installer creates:
+ 
+ ```text
+-namespace: flux-system
++namespace: argocd
+ Secret: sops-age
+ key: age.agekey
+ ```
+ 
+-Flux Kustomizations that include encrypted manifests require:
++Argo CD Applications that include encrypted manifests require:
+ 
+ ```yaml
+ spec:
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/bootstrap.md b/docs/bootstrap.md
+--- a/docs/bootstrap.md	2026-07-17 01:42:16.000000000 +0000
++++ b/docs/bootstrap.md	2026-07-17 18:53:05.752733118 +0000
+@@ -11,21 +11,21 @@
+ 
+ The generated kubeconfig is written to the repository root and ignored by Git.
+ 
+-## 2. Flux bootstrap
++## 2. Argo CD bootstrap
+ 
+-Install Flux CLI and export a GitHub token with repository administration access:
++Install Argo CD CLI and export a GitHub token with repository administration access:
+ 
+ ```bash
+ export GITHUB_TOKEN=...
+-flux bootstrap github   --owner=cpp20120   --repository=CasinoShiz.Infrastructure   --branch=main   --path=clusters/production   --personal
++python scripts/installer.py --config deploy/installer.toml
+ ```
+ 
+-For a private repository, keep it private and let Flux create a deploy key.
++For a private repository, keep it private and let Argo CD create a deploy key.
+ 
+ ## 3. Secrets
+ 
+ Install SOPS and age. Generate an age key and register its public key in `.sops.yaml`.
+-Store the private key in the cluster as `sops-age` in `flux-system`.
++Store the private key in the cluster as `sops-age` in `argocd`.
+ 
+ Never commit plaintext credentials.
+ 
+@@ -51,3 +51,14 @@
+ - Test full restore onto a new VPS.
+ - Restrict Grafana and MinIO admin endpoints.
+ - Configure firewall for SSH, HTTP and HTTPS only.
++
++## Local Argo CD bootstrap
++
++```bash
++python scripts/infra.py local create
++python scripts/infra.py local argocd-bootstrap
++```
++
++The local root application deploys the data stack, observability, and the
++CasinoShiz chart with `charts/casinoshiz/values-local.yaml`. Push application
++images to the k3d registry with `python scripts/infra.py local image-push`.
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/data-backups.md b/docs/data-backups.md
+--- a/docs/data-backups.md	2026-07-17 01:55:54.000000000 +0000
++++ b/docs/data-backups.md	2026-07-17 16:46:52.000000000 +0000
+@@ -35,7 +35,7 @@
+ ## Secret installation
+ 
+ Copy the examples, replace values, encrypt with SOPS, then add the encrypted
+-files to the appropriate Kustomization:
++files to the appropriate Application:
+ 
+ ```bash
+ cp data/data.secret.yaml.example data/data.secret.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/migration-from-compose.md b/docs/migration-from-compose.md
+--- a/docs/migration-from-compose.md	2026-07-17 01:42:16.000000000 +0000
++++ b/docs/migration-from-compose.md	2026-07-17 16:46:52.000000000 +0000
+@@ -4,7 +4,7 @@
+ 
+ ## Phase 1
+ 
+-- k3s, Flux, cert-manager;
++- k3s, Argo CD, cert-manager;
+ - external GHCR;
+ - application Helm chart;
+ - BFFs and game services;
+diff -ruN '--exclude=.git' '--exclude=.task' a/docs/platform-complete.md b/docs/platform-complete.md
+--- a/docs/platform-complete.md	2026-07-17 02:01:36.000000000 +0000
++++ b/docs/platform-complete.md	2026-07-17 16:46:52.000000000 +0000
+@@ -39,5 +39,5 @@
+ 1. Replace `CHANGE_ME` values.
+ 2. Run GitHub Actions successfully.
+ 3. Add encrypted secrets.
+-4. Bootstrap Flux.
++4. Bootstrap Argo CD.
+ 5. Verify certificates, PVCs, scrape targets and backup Jobs.
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/cert-manager/clusterissuer-job.yaml b/platform/cert-manager/clusterissuer-job.yaml
+--- a/platform/cert-manager/clusterissuer-job.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/cert-manager/clusterissuer-job.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,40 +0,0 @@
+-apiVersion: batch/v1
+-kind: Job
+-metadata:
+-  name: create-letsencrypt-production-issuer
+-  namespace: cert-manager
+-  annotations:
+-    kustomize.toolkit.fluxcd.io/force: enabled
+-spec:
+-  ttlSecondsAfterFinished: 300
+-  backoffLimit: 20
+-  template:
+-    spec:
+-      serviceAccountName: cert-manager-issuer-bootstrap
+-      restartPolicy: OnFailure
+-      containers:
+-        - name: kubectl
+-          image: bitnami/kubectl:latest
+-          command:
+-            - /bin/sh
+-            - -ec
+-            - |
+-              until kubectl get crd clusterissuers.cert-manager.io >/dev/null 2>&1; do
+-                sleep 3
+-              done
+-              cat <<'YAML' | kubectl apply -f -
+-              apiVersion: cert-manager.io/v1
+-              kind: ClusterIssuer
+-              metadata:
+-                name: letsencrypt-production
+-              spec:
+-                acme:
+-                  email: CHANGE_ME
+-                  server: https://acme-v02.api.letsencrypt.org/directory
+-                  privateKeySecretRef:
+-                    name: letsencrypt-production-account
+-                  solvers:
+-                    - http01:
+-                        ingress:
+-                          ingressClassName: traefik
+-              YAML
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/cert-manager/helmrelease.yaml b/platform/cert-manager/helmrelease.yaml
+--- a/platform/cert-manager/helmrelease.yaml	2026-07-17 01:42:16.000000000 +0000
++++ b/platform/cert-manager/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,17 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: cert-manager
+-  namespace: cert-manager
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: cert-manager
+-      sourceRef:
+-        kind: HelmRepository
+-        name: jetstack
+-        namespace: flux-system
+-  values:
+-    crds:
+-      enabled: true
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/cert-manager/helmrepository.yaml b/platform/cert-manager/helmrepository.yaml
+--- a/platform/cert-manager/helmrepository.yaml	2026-07-17 01:42:16.000000000 +0000
++++ b/platform/cert-manager/helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: jetstack
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://charts.jetstack.io
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/cert-manager/kustomization.yaml b/platform/cert-manager/kustomization.yaml
+--- a/platform/cert-manager/kustomization.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/cert-manager/kustomization.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -1,7 +1,4 @@
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+ resources:
+-  - helmrepository.yaml
+-  - helmrelease.yaml
+-  - rbac.yaml
+-  - clusterissuer-job.yaml
++  - clusterissuer.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/cert-manager/rbac.yaml b/platform/cert-manager/rbac.yaml
+--- a/platform/cert-manager/rbac.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/cert-manager/rbac.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,30 +0,0 @@
+-apiVersion: v1
+-kind: ServiceAccount
+-metadata:
+-  name: cert-manager-issuer-bootstrap
+-  namespace: cert-manager
+----
+-apiVersion: rbac.authorization.k8s.io/v1
+-kind: ClusterRole
+-metadata:
+-  name: cert-manager-issuer-bootstrap
+-rules:
+-  - apiGroups: ["cert-manager.io"]
+-    resources: ["clusterissuers"]
+-    verbs: ["get", "create", "patch", "update"]
+-  - apiGroups: ["apiextensions.k8s.io"]
+-    resources: ["customresourcedefinitions"]
+-    verbs: ["get"]
+----
+-apiVersion: rbac.authorization.k8s.io/v1
+-kind: ClusterRoleBinding
+-metadata:
+-  name: cert-manager-issuer-bootstrap
+-subjects:
+-  - kind: ServiceAccount
+-    name: cert-manager-issuer-bootstrap
+-    namespace: cert-manager
+-roleRef:
+-  apiGroup: rbac.authorization.k8s.io
+-  kind: ClusterRole
+-  name: cert-manager-issuer-bootstrap
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/keda/helmrelease.yaml b/platform/keda/helmrelease.yaml
+--- a/platform/keda/helmrelease.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/keda/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,21 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: keda
+-  namespace: keda
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: keda
+-      sourceRef:
+-        kind: HelmRepository
+-        name: kedacore
+-        namespace: flux-system
+-  values:
+-    operator:
+-      replicaCount: 1
+-    metricsServer:
+-      replicaCount: 1
+-    webhooks:
+-      replicaCount: 1
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/keda/helmrepository.yaml b/platform/keda/helmrepository.yaml
+--- a/platform/keda/helmrepository.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/keda/helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: kedacore
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://kedacore.github.io/charts
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/keda/kustomization.yaml b/platform/keda/kustomization.yaml
+--- a/platform/keda/kustomization.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/keda/kustomization.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -1,5 +1,3 @@
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+-resources:
+-  - helmrepository.yaml
+-  - helmrelease.yaml
++resources: []
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/monitoring/helmrelease.yaml b/platform/monitoring/helmrelease.yaml
+--- a/platform/monitoring/helmrelease.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/monitoring/helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,71 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: victoria-metrics
+-  namespace: monitoring
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: victoria-metrics-k8s-stack
+-      sourceRef:
+-        kind: HelmRepository
+-        name: victoria-metrics
+-        namespace: flux-system
+-  values:
+-    nameOverride: vmks
+-
+-    vmsingle:
+-      enabled: true
+-      spec:
+-        retentionPeriod: "14d"
+-        storage:
+-          accessModes: ["ReadWriteOnce"]
+-          storageClassName: local-path
+-          resources:
+-            requests:
+-              storage: 20Gi
+-
+-    vmcluster:
+-      enabled: false
+-
+-    vmagent:
+-      spec:
+-        scrapeInterval: 30s
+-
+-    vmalert:
+-      enabled: true
+-
+-    alertmanager:
+-      enabled: true
+-
+-    grafana:
+-      enabled: true
+-      persistence:
+-        enabled: true
+-        storageClassName: local-path
+-        size: 5Gi
+-      ingress:
+-        enabled: true
+-        ingressClassName: traefik
+-        annotations:
+-          cert-manager.io/cluster-issuer: letsencrypt-production
+-        hosts:
+-          - grafana.CHANGE_ME
+-        tls:
+-          - secretName: grafana-tls
+-            hosts:
+-              - grafana.CHANGE_ME
+-      additionalDataSources:
+-        - name: Tempo
+-          type: tempo
+-          access: proxy
+-          url: http://tempo.observability.svc.cluster.local:3100
+-          isDefault: false
+-          jsonData:
+-            tracesToLogsV2:
+-              datasourceUid: ""
+-            serviceMap:
+-              datasourceUid: VictoriaMetrics
+-            nodeGraph:
+-              enabled: true
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/monitoring/helmrepository.yaml b/platform/monitoring/helmrepository.yaml
+--- a/platform/monitoring/helmrepository.yaml	2026-07-17 01:42:16.000000000 +0000
++++ b/platform/monitoring/helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: victoria-metrics
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://victoriametrics.github.io/helm-charts/
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/monitoring/kustomization.yaml b/platform/monitoring/kustomization.yaml
+--- a/platform/monitoring/kustomization.yaml	1979-12-31 17:00:00.000000000 +0000
++++ b/platform/monitoring/kustomization.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -1,6 +1,4 @@
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+ resources:
+-  - helmrepository.yaml
+-  - helmrelease.yaml
+   - rules.yaml
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/README.md b/platform/tracing/README.md
+--- a/platform/tracing/README.md	2026-07-17 01:42:16.000000000 +0000
++++ b/platform/tracing/README.md	2026-07-17 16:47:41.000000000 +0000
+@@ -1,6 +1,6 @@
+ # Tracing
+ 
+-Add Flux HelmReleases for:
++Managed as Argo CD Applications:
+ 
+ - OpenTelemetry Collector
+ - Grafana Tempo
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/grafana-helmrepository.yaml b/platform/tracing/grafana-helmrepository.yaml
+--- a/platform/tracing/grafana-helmrepository.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/tracing/grafana-helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: grafana-community
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://grafana-community.github.io/helm-charts
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/kustomization.yaml b/platform/tracing/kustomization.yaml
+--- a/platform/tracing/kustomization.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/tracing/kustomization.yaml	2026-07-17 16:46:52.000000000 +0000
+@@ -1,7 +1,3 @@
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+-resources:
+-  - grafana-helmrepository.yaml
+-  - otel-helmrepository.yaml
+-  - tempo-helmrelease.yaml
+-  - otel-helmrelease.yaml
++resources: []
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/otel-helmrelease.yaml b/platform/tracing/otel-helmrelease.yaml
+--- a/platform/tracing/otel-helmrelease.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/tracing/otel-helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,76 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: otel-collector
+-  namespace: observability
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: opentelemetry-collector
+-      sourceRef:
+-        kind: HelmRepository
+-        name: open-telemetry
+-        namespace: flux-system
+-  values:
+-    mode: deployment
+-    replicaCount: 1
+-    image:
+-      repository: otel/opentelemetry-collector-contrib
+-    command:
+-      name: otelcol-contrib
+-    presets:
+-      kubernetesAttributes:
+-        enabled: true
+-    config:
+-      receivers:
+-        otlp:
+-          protocols:
+-            grpc:
+-              endpoint: 0.0.0.0:4317
+-            http:
+-              endpoint: 0.0.0.0:4318
+-      processors:
+-        memory_limiter:
+-          check_interval: 5s
+-          limit_percentage: 75
+-          spike_limit_percentage: 15
+-        batch:
+-          send_batch_size: 1024
+-          timeout: 5s
+-        resource:
+-          attributes:
+-            - key: deployment.environment
+-              value: production
+-              action: upsert
+-      exporters:
+-        otlp/tempo:
+-          endpoint: tempo.observability.svc.cluster.local:4317
+-          tls:
+-            insecure: true
+-        debug:
+-          verbosity: basic
+-      service:
+-        pipelines:
+-          traces:
+-            receivers: [otlp]
+-            processors: [memory_limiter, resource, batch]
+-            exporters: [otlp/tempo]
+-    ports:
+-      otlp:
+-        enabled: true
+-        containerPort: 4317
+-        servicePort: 4317
+-        protocol: TCP
+-      otlp-http:
+-        enabled: true
+-        containerPort: 4318
+-        servicePort: 4318
+-        protocol: TCP
+-    resources:
+-      requests:
+-        cpu: 50m
+-        memory: 128Mi
+-      limits:
+-        cpu: "1"
+-        memory: 512Mi
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/otel-helmrepository.yaml b/platform/tracing/otel-helmrepository.yaml
+--- a/platform/tracing/otel-helmrepository.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/tracing/otel-helmrepository.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,8 +0,0 @@
+-apiVersion: source.toolkit.fluxcd.io/v1
+-kind: HelmRepository
+-metadata:
+-  name: open-telemetry
+-  namespace: flux-system
+-spec:
+-  interval: 24h
+-  url: https://open-telemetry.github.io/opentelemetry-helm-charts
+diff -ruN '--exclude=.git' '--exclude=.task' a/platform/tracing/tempo-helmrelease.yaml b/platform/tracing/tempo-helmrelease.yaml
+--- a/platform/tracing/tempo-helmrelease.yaml	2026-07-17 02:01:36.000000000 +0000
++++ b/platform/tracing/tempo-helmrelease.yaml	1970-01-01 00:00:00.000000000 +0000
+@@ -1,46 +0,0 @@
+-apiVersion: helm.toolkit.fluxcd.io/v2
+-kind: HelmRelease
+-metadata:
+-  name: tempo
+-  namespace: observability
+-spec:
+-  interval: 30m
+-  chart:
+-    spec:
+-      chart: tempo
+-      sourceRef:
+-        kind: HelmRepository
+-        name: grafana-community
+-        namespace: flux-system
+-  values:
+-    replicas: 1
+-    tempo:
+-      reportingEnabled: false
+-      retention: 168h
+-      receivers:
+-        otlp:
+-          protocols:
+-            grpc:
+-              endpoint: 0.0.0.0:4317
+-            http:
+-              endpoint: 0.0.0.0:4318
+-      storage:
+-        trace:
+-          backend: local
+-          local:
+-            path: /var/tempo/traces
+-          wal:
+-            path: /var/tempo/wal
+-    persistence:
+-      enabled: true
+-      storageClassName: local-path
+-      size: 20Gi
+-    resources:
+-      requests:
+-        cpu: 100m
+-        memory: 256Mi
+-      limits:
+-        cpu: "2"
+-        memory: 2Gi
+-    service:
+-      type: ClusterIP
+diff -ruN '--exclude=.git' '--exclude=.task' a/scripts/infra.py b/scripts/infra.py
+--- a/scripts/infra.py	2026-07-17 12:44:34.000000000 +0000
++++ b/scripts/infra.py	2026-07-17 18:53:05.604297110 +0000
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python3
+ """Unified operational CLI for CasinoShiz.Infrastructure.
+ 
+-Host provisioning remains in Ansible. Flux/Helm/Kustomize remain declarative.
++Host provisioning remains in Ansible. Argo CD/Helm/Kustomize remain declarative.
+ This CLI replaces repository-level shell orchestration with one entry point.
+ Container commands embedded in Kubernetes Jobs may still use /bin/sh.
+ """
+@@ -17,9 +17,9 @@
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+ 
+-SCRIPTS = {'cluster-status.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\necho "== Nodes =="\nkubectl get nodes -o wide\n\necho\necho "== Flux =="\nif command -v flux >/dev/null 2>&1; then\n  flux get all -A\nelse\n  echo "flux CLI is not installed"\nfi\n\necho\necho "== Workloads =="\nkubectl get deployments,statefulsets -A\n\necho\necho "== Pods not Running or Completed =="\nkubectl get pods -A \\\n  --field-selector=status.phase!=Running,status.phase!=Succeeded \\\n  || true\n\necho\necho "== PVCs =="\nkubectl get pvc -A\n\necho\necho "== Ingresses =="\nkubectl get ingress -A\n\necho\necho "== Certificates =="\nkubectl get certificates -A 2>/dev/null || true\n\necho\necho "== Data Jobs =="\nkubectl get cronjobs,jobs -n data\n\necho\necho "== Recent warning events =="\nkubectl get events -A \\\n  --field-selector=type=Warning \\\n  --sort-by=.lastTimestamp \\\n  | tail -n 50\n'}, 'local-cluster-create.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ncluster="${K3D_CLUSTER_NAME:-casinoshiz-local}"\nregistry="k3d-casinoshiz-registry.localhost"\nregistry_port="${K3D_REGISTRY_PORT:-5005}"\n\nif ! docker info >/dev/null 2>&1; then\n  echo "Docker daemon is not available." >&2\n  exit 1\nfi\n\nif ! k3d registry list | grep -q "${registry}"; then\n  k3d registry create casinoshiz-registry.localhost \\\n    --port "${registry_port}"\nfi\n\nif ! k3d cluster list | grep -q "^${cluster}[[:space:]]"; then\n  k3d cluster create "${cluster}" \\\n    --servers 1 \\\n    --agents 0 \\\n    --registry-use "${registry}:${registry_port}" \\\n    --port "8080:80@loadbalancer" \\\n    --port "8443:443@loadbalancer" \\\n    --wait\nfi\n\nkubectl config use-context "k3d-${cluster}"\nkubectl get nodes\n'}, 'local-cluster-delete.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ncluster="${K3D_CLUSTER_NAME:-casinoshiz-local}"\n\nk3d cluster delete "${cluster}" || true\n\nif [[ "${DELETE_LOCAL_REGISTRY:-false}" == "true" ]]; then\n  k3d registry delete casinoshiz-registry.localhost || true\nfi\n'}, 'local-flux-bootstrap.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nage_key_file="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"\n\nif [[ ! -f "${age_key_file}" ]]; then\n  echo "Age key not found: ${age_key_file}" >&2\n  exit 1\nfi\n\nflux install\n\nkubectl create namespace flux-system \\\n  --dry-run=client \\\n  -o yaml \\\n  | kubectl apply -f -\n\nkubectl create secret generic sops-age \\\n  --namespace=flux-system \\\n  --from-file=age.agekey="${age_key_file}" \\\n  --dry-run=client \\\n  -o yaml \\\n  | kubectl apply -f -\n\nkubectl apply -k clusters/local/bootstrap\n\nflux reconcile source git casinoshiz-infrastructure \\\n  --namespace flux-system \\\n  --with-source\n\nflux get kustomizations -A\n'}, 'local-image-push.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nif (($# != 2)); then\n  echo "Usage: $0 <source-image:tag> <target-repository>" >&2\n  echo "Example: $0 casinoshiz-backend:latest casinoshiz-backend" >&2\n  exit 2\nfi\n\nsource_image="$1"\ntarget_repository="$2"\nhost_registry="${LOCAL_REGISTRY_HOST:-localhost:5005}"\ntarget="${host_registry}/${target_repository}:local"\n\ndocker image inspect "${source_image}" >/dev/null\ndocker tag "${source_image}" "${target}"\ndocker push "${target}"\n\necho "Pushed ${target}"\n'}, 'manual-backup.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ntimestamp="$(date +%s)"\ncronjobs=(\n  postgres-backup\n  redis-backup\n  clickhouse-backup\n  minio-backup\n)\n\njobs=()\n\nfor cronjob in "${cronjobs[@]}"; do\n  job="${cronjob}-manual-${timestamp}"\n  kubectl create job \\\n    --from="cronjob/${cronjob}" \\\n    "$job" \\\n    -n data\n  jobs+=("$job")\ndone\n\nfor job in "${jobs[@]}"; do\n  kubectl wait \\\n    --for=condition=complete \\\n    "job/${job}" \\\n    -n data \\\n    --timeout=30m\n\n  kubectl logs \\\n    "job/${job}" \\\n    -n data\ndone\n\necho "All manual backup Jobs completed."\n'}, 'post-deploy-check.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nwait_timeout="${WAIT_TIMEOUT:-300s}"\n\necho "Checking Flux..."\nif command -v flux >/dev/null 2>&1; then\n  flux get all -A\nfi\n\necho "Waiting for data StatefulSets..."\nfor statefulset in postgres redis clickhouse minio; do\n  kubectl rollout status "statefulset/${statefulset}" \\\n    -n data \\\n    --timeout="${wait_timeout}"\ndone\n\necho "Waiting for CasinoShiz Deployments..."\nwhile IFS= read -r deployment; do\n  kubectl rollout status "$deployment" \\\n    -n casinoshiz \\\n    --timeout="${wait_timeout}"\ndone < <(kubectl get deployments -n casinoshiz -o name)\n\necho "Checking PVCs..."\nkubectl get pvc -A\n\nunbound="$(\n  kubectl get pvc -A \\\n    -o jsonpath=\'{range .items[?(@.status.phase!="Bound")]}{.metadata.namespace}/{.metadata.name}{"\\n"}{end}\'\n)"\nif [[ -n "$unbound" ]]; then\n  printf \'Unbound PVCs:\\n%s\\n\' "$unbound" >&2\n  exit 1\nfi\n\necho "Checking certificates..."\nkubectl get certificates -A\n\necho "Checking ingresses..."\nkubectl get ingress -A\n\necho "Checking backup CronJobs..."\nkubectl get cronjobs -n data\n\necho "Checking observability..."\nkubectl get pods -n monitoring\nkubectl get pods -n observability\n\necho "Checking application health from inside the cluster..."\nfor service in telegram-bff admin-bff rest-api; do\n  kubectl run "health-${service}-$(date +%s)" \\\n    --rm \\\n    --restart=Never \\\n    --image=curlimages/curl:8.12.1 \\\n    -n casinoshiz \\\n    -- \\\n    -fsS "http://${service}.casinoshiz.svc.cluster.local:8080/health/ready"\ndone\n\necho "Post-deployment checks passed."\n'}, 'preflight.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nrequired=(git helm kustomize kubectl go-task ansible-playbook)\nmissing=()\n\nfor tool in "${required[@]}"; do\n  if ! command -v "$tool" >/dev/null 2>&1; then\n    missing+=("$tool")\n  fi\ndone\n\nif ((${#missing[@]} > 0)); then\n  printf \'Missing required tools: %s\\n\' "${missing[*]}" >&2\n  exit 1\nfi\n\nif [[ ! -f Taskfile.yml ]]; then\n  echo "Run this script from the repository root." >&2\n  exit 1\nfi\n\necho "Validating repository..."\ngo-task clean\ngo-task validate\n\necho "Checking unresolved placeholders..."\nplaceholders="$(git grep -n CHANGE_ME || true)"\nif [[ -n "$placeholders" ]]; then\n  printf \'%s\\n\' "$placeholders"\n  echo "Unresolved CHANGE_ME values remain." >&2\n  exit 1\nfi\n\necho "Checking repository state..."\nif [[ -n "$(git status --porcelain)" ]]; then\n  git status --short\n  echo "Working tree is not clean." >&2\n  exit 1\nfi\n\necho "Checking Kubernetes access..."\nkubectl version --client\nkubectl cluster-info\nkubectl get nodes\n\necho "Preflight passed."\n'}, 'restore-clickhouse.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nSOURCE_DATABASE="${SOURCE_DATABASE:-cazinoshiz}"\nTARGET_DATABASE="${TARGET_DATABASE:-}"\nDROP_TARGET="${DROP_TARGET:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-clickhouse.sh [options]\n\nOptions:\n  --backup NAME          ClickHouse Disk backup name or "latest".\n  --source-db NAME       Source database stored in backup.\n  --target-db NAME       Target database. Defaults to a timestamped restore DB.\n  --drop-target          Drop an existing target database.\n  --keep-job             Keep the Job after completion.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --source-db) SOURCE_DATABASE="$2"; shift 2 ;;\n    --target-db) TARGET_DATABASE="$2"; shift 2 ;;\n    --drop-target) DROP_TARGET=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\nfor value in "$SOURCE_DATABASE" "${TARGET_DATABASE:-placeholder}"; do\n  case "$value" in\n    *[!a-zA-Z0-9_]*|\'\') die "invalid database identifier: $value" ;;\n  esac\ndone\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir clickhouse)"\nfi\n\nif [ -z "$TARGET_DATABASE" ]; then\n  TARGET_DATABASE="${SOURCE_DATABASE}_restore_$(date -u +%Y%m%d%H%M%S)"\nfi\n\nJOB="clickhouse-restore-$(date +%s)"\nDROP_QUERY=""\nif [ "$DROP_TARGET" = true ]; then\n  DROP_QUERY="DROP DATABASE IF EXISTS \\\\\\`$TARGET_DATABASE\\\\\\`;"\nfi\n\ninfo "Restoring ClickHouse $SOURCE_DATABASE from $BACKUP into $TARGET_DATABASE"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: clickhouse/clickhouse-server:24.8-alpine\n          env:\n            - name: CLICKHOUSE_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: clickhouse-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              client() {\n                clickhouse-client \\\n                  --host clickhouse.data.svc.cluster.local \\\n                  --password "\\$CLICKHOUSE_PASSWORD" \\\n                  --multiquery \\\n                  --query "\\$1"\n              }\n\n              client "$DROP_QUERY"\n\n              existing="\\$(clickhouse-client \\\n                --host clickhouse.data.svc.cluster.local \\\n                --password "\\$CLICKHOUSE_PASSWORD" \\\n                --query "EXISTS DATABASE \\\\\\`$TARGET_DATABASE\\\\\\`")"\n              test "\\$existing" = 0 || {\n                echo "target database already exists: $TARGET_DATABASE" >&2\n                exit 1\n              }\n\n              client "RESTORE DATABASE \\\\\\`$SOURCE_DATABASE\\\\\\`\n                AS \\\\\\`$TARGET_DATABASE\\\\\\`\n                FROM Disk(\'backup\', \'$BACKUP\')"\n\n              tables="\\$(clickhouse-client \\\n                --host clickhouse.data.svc.cluster.local \\\n                --password "\\$CLICKHOUSE_PASSWORD" \\\n                --query "SELECT count() FROM system.tables WHERE database = \'$TARGET_DATABASE\'")"\n              test "\\$tables" -gt 0\n              echo "restored database=$TARGET_DATABASE tables=\\$tables"\nYAML\n\nwait_job "$JOB" 1800s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "ClickHouse restore completed: $TARGET_DATABASE"\n'}, 'restore-minio.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nSOURCE_BUCKET="${SOURCE_BUCKET:-}"\nTARGET_BUCKET="${TARGET_BUCKET:-}"\nOVERWRITE="${OVERWRITE:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-minio.sh --bucket NAME [options]\n\nOptions:\n  --backup NAME          Backup directory or "latest".\n  --bucket NAME          Source bucket directory inside the backup.\n  --target-bucket NAME   Destination bucket. Defaults to a timestamped name.\n  --overwrite            Allow mirroring into an existing target bucket.\n  --keep-job             Keep the Job.\n\nBy default this restores into a new bucket and does not overwrite production.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --bucket) SOURCE_BUCKET="$2"; shift 2 ;;\n    --target-bucket) TARGET_BUCKET="$2"; shift 2 ;;\n    --overwrite) OVERWRITE=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\n[ -n "$SOURCE_BUCKET" ] || die "--bucket is required"\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir minio)"\nfi\n\nif [ -z "$TARGET_BUCKET" ]; then\n  TARGET_BUCKET="${SOURCE_BUCKET}-restore-$(date -u +%Y%m%d%H%M%S)"\nfi\n\nJOB="minio-restore-$(date +%s)"\nMIRROR_FLAG=""\nif [ "$OVERWRITE" = true ]; then\n  MIRROR_FLAG="--overwrite"\nfi\n\ninfo "Restoring MinIO bucket $SOURCE_BUCKET from $BACKUP into $TARGET_BUCKET"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: minio/mc:RELEASE.2025-08-13T08-35-41Z\n          env:\n            - name: MINIO_ROOT_USER\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: minio-root-user\n            - name: MINIO_ROOT_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: minio-root-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              src="/backup/minio/$BACKUP/$SOURCE_BUCKET"\n              test -d "\\$src"\n\n              mc alias set target \\\n                http://minio.data.svc.cluster.local:9000 \\\n                "\\$MINIO_ROOT_USER" \\\n                "\\$MINIO_ROOT_PASSWORD"\n\n              if mc stat "target/$TARGET_BUCKET" >/dev/null 2>&1; then\n                test "$OVERWRITE" = true || {\n                  echo "target bucket already exists: $TARGET_BUCKET" >&2\n                  exit 1\n                }\n              else\n                mc mb "target/$TARGET_BUCKET"\n              fi\n\n              mc mirror $MIRROR_FLAG "\\$src" "target/$TARGET_BUCKET"\n\n              local_count="\\$(find "\\$src" -type f | wc -l | tr -d \' \')"\n              remote_count="\\$(mc find "target/$TARGET_BUCKET" --type f | wc -l | tr -d \' \')"\n              test "\\$remote_count" -ge "\\$local_count"\n              echo "restored bucket=$TARGET_BUCKET objects=\\$remote_count"\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\nwait_job "$JOB" 1800s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "MinIO restore completed: $TARGET_BUCKET"\n'}, 'restore-postgres.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nDATABASE="${DATABASE:-backend}"\nTARGET_DATABASE="${TARGET_DATABASE:-}"\nDROP_TARGET="${DROP_TARGET:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-postgres.sh [options]\n\nOptions:\n  --backup NAME          Backup directory name or "latest".\n  --database NAME        Source dump name, default: backend.\n  --target NAME          Target database. Default: <database>_restore_<timestamp>.\n  --drop-target          Drop an existing target database before restore.\n  --keep-job             Keep the Kubernetes Job after completion.\n\nEnvironment:\n  NAMESPACE=data\n  BACKUP_PVC=data-backups\n\nThe production database is never overwritten unless --target explicitly names it.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --database) DATABASE="$2"; shift 2 ;;\n    --target) TARGET_DATABASE="$2"; shift 2 ;;\n    --drop-target) DROP_TARGET=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\ncase "$DATABASE" in\n  *[!a-zA-Z0-9_]*|\'\') die "invalid database name: $DATABASE" ;;\nesac\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir postgres)"\nfi\n\nif [ -z "$TARGET_DATABASE" ]; then\n  TARGET_DATABASE="${DATABASE}_restore_$(date -u +%Y%m%d%H%M%S)"\nfi\n\ncase "$TARGET_DATABASE" in\n  *[!a-zA-Z0-9_]*|\'\') die "invalid target database name: $TARGET_DATABASE" ;;\nesac\n\nJOB="postgres-restore-$(date +%s)"\nDROP_SQL=""\nif [ "$DROP_TARGET" = true ]; then\n  DROP_SQL="DROP DATABASE IF EXISTS \\"$TARGET_DATABASE\\" WITH (FORCE);"\nfi\n\ninfo "Restoring PostgreSQL $DATABASE from $BACKUP into $TARGET_DATABASE"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\n  labels:\n    app.kubernetes.io/name: postgres-restore\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: postgres-restore\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: postgres:16-alpine\n          env:\n            - name: PGHOST\n              value: postgres.data.svc.cluster.local\n            - name: PGUSER\n              value: postgres\n            - name: PGPASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: postgres-superuser-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              backup_dir="/backup/postgres/$BACKUP"\n              dump="\\$backup_dir/$DATABASE.dump"\n              test -s "\\$dump"\n\n              if test -f "\\$backup_dir/SHA256SUMS"; then\n                cd "\\$backup_dir"\n                sha256sum -c SHA256SUMS\n              fi\n\n              psql --dbname=postgres --set=ON_ERROR_STOP=1 <<\'SQL\'\n              $DROP_SQL\nSQL\n\n              exists="\\$(psql --dbname=postgres --tuples-only --no-align \\\n                --command "SELECT 1 FROM pg_database WHERE datname = \'$TARGET_DATABASE\'")"\n              test -z "\\$exists" || {\n                echo "target database already exists: $TARGET_DATABASE" >&2\n                exit 1\n              }\n\n              createdb "$TARGET_DATABASE"\n              pg_restore \\\n                --exit-on-error \\\n                --no-owner \\\n                --no-privileges \\\n                --dbname="$TARGET_DATABASE" \\\n                "\\$dump"\n\n              tables="\\$(psql --dbname="$TARGET_DATABASE" --tuples-only --no-align \\\n                --command "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname NOT IN (\'pg_catalog\',\'information_schema\')")"\n              test "\\$tables" -gt 0\n              echo "restored database=$TARGET_DATABASE tables=\\$tables"\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\nwait_job "$JOB" 900s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "PostgreSQL restore completed: $TARGET_DATABASE"\n'}, 'restore-redis.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nMODE="${MODE:-verify}"\nCONFIRM="${CONFIRM:-}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-redis.sh [options]\n\nOptions:\n  --backup NAME          Backup directory or "latest".\n  --mode verify          Start an isolated Redis and validate the RDB (default).\n  --mode replace         Replace the production Redis PVC contents.\n  --confirm REPLACE_REDIS\n                        Required with --mode replace.\n  --keep-job             Keep the verification Job.\n\n`replace` scales the Redis StatefulSet to zero, rewrites its PVC and starts it.\nUse only during a maintenance window.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --mode) MODE="$2"; shift 2 ;;\n    --confirm) CONFIRM="$2"; shift 2 ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir redis)"\nfi\n\ncase "$MODE" in\n  verify)\n    JOB="redis-restore-verify-$(date +%s)"\n    info "Verifying Redis backup $BACKUP in an isolated instance"\n\n    cat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: verify\n          image: redis:7-alpine\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              src="/backup/redis/$BACKUP"\n              test -s "\\$src/dump.rdb"\n              mkdir -p /restore\n              cp "\\$src/dump.rdb" /restore/dump.rdb\n\n              if test -f "\\$src/SHA256SUMS"; then\n                cd "\\$src"\n                sha256sum -c SHA256SUMS || true\n              fi\n\n              redis-check-rdb /restore/dump.rdb\n              redis-server \\\n                --dir /restore \\\n                --dbfilename dump.rdb \\\n                --appendonly no \\\n                --protected-mode no \\\n                --bind 127.0.0.1 \\\n                --daemonize yes\n\n              for attempt in \\$(seq 1 30); do\n                redis-cli -h 127.0.0.1 ping >/dev/null 2>&1 && break\n                sleep 1\n              done\n\n              redis-cli -h 127.0.0.1 ping\n              keys="\\$(redis-cli -h 127.0.0.1 dbsize | tr -d \'\\r\')"\n              echo "verified backup=$BACKUP keys=\\$keys"\n              redis-cli -h 127.0.0.1 shutdown nosave\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\n    wait_job "$JOB" 600s\n    if [ "$KEEP_JOB" != true ]; then\n      kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\n    fi\n    ;;\n\n  replace)\n    [ "$CONFIRM" = REPLACE_REDIS ] || die \\\n      "--mode replace requires --confirm REPLACE_REDIS"\n\n    info "Scaling Redis StatefulSet to zero"\n    kubectl -n "$NAMESPACE" scale statefulset redis --replicas=0\n    kubectl -n "$NAMESPACE" wait \\\n      --for=delete pod/redis-0 \\\n      --timeout=180s || true\n\n    POD="redis-restore-copy-$(date +%s)"\n    info "Replacing production Redis data from backup $BACKUP"\n    cat <<YAML | kubectl apply -f -\napiVersion: v1\nkind: Pod\nmetadata:\n  name: $POD\n  namespace: $NAMESPACE\nspec:\n  restartPolicy: Never\n  containers:\n    - name: restore\n      image: redis:7-alpine\n      command:\n        - /bin/sh\n        - -ec\n        - |\n          src="/backup/redis/$BACKUP"\n          test -s "\\$src/dump.rdb"\n          redis-check-rdb "\\$src/dump.rdb"\n\n          find /redis-data -mindepth 1 -maxdepth 1 -exec rm -rf {} +\n          cp "\\$src/dump.rdb" /redis-data/dump.rdb\n\n          if test -d "\\$src/appendonlydir"; then\n            cp -a "\\$src/appendonlydir" /redis-data/\n          fi\n\n          chown -R 999:999 /redis-data\n          echo "production Redis PVC replaced"\n      volumeMounts:\n        - name: backups\n          mountPath: /backup\n          readOnly: true\n        - name: redis-data\n          mountPath: /redis-data\n  volumes:\n    - name: backups\n      persistentVolumeClaim:\n        claimName: $BACKUP_PVC\n    - name: redis-data\n      persistentVolumeClaim:\n        claimName: data-redis-0\nYAML\n\n    kubectl -n "$NAMESPACE" wait \\\n      --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n      "pod/$POD" \\\n      --timeout=300s || {\n        kubectl -n "$NAMESPACE" logs "$POD" || true\n        die "Redis restore copy failed; StatefulSet remains scaled down"\n      }\n    kubectl -n "$NAMESPACE" logs "$POD"\n    kubectl -n "$NAMESPACE" delete pod "$POD" --wait=false >/dev/null\n\n    info "Starting Redis StatefulSet"\n    kubectl -n "$NAMESPACE" scale statefulset redis --replicas=1\n    kubectl -n "$NAMESPACE" rollout status statefulset/redis --timeout=300s\n    ;;\n\n  *) die "mode must be verify or replace" ;;\nesac\n'}, 'restore-smoke-test.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n\nPOSTGRES_DATABASE="${POSTGRES_DATABASE:-backend}"\nCLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-cazinoshiz}"\nMINIO_BUCKET="${MINIO_BUCKET:-}"\n\ncleanup_postgres=""\ncleanup_clickhouse=""\n\ntimestamp="$(date -u +%Y%m%d%H%M%S)"\npg_target="${POSTGRES_DATABASE}_restore_smoke_${timestamp}"\nch_target="${CLICKHOUSE_DATABASE}_restore_smoke_${timestamp}"\n\necho "==> PostgreSQL restore smoke test"\n"$SCRIPT_DIR/restore-postgres.sh" \\\n  --database "$POSTGRES_DATABASE" \\\n  --target "$pg_target"\ncleanup_postgres="$pg_target"\n\necho "==> ClickHouse restore smoke test"\n"$SCRIPT_DIR/restore-clickhouse.sh" \\\n  --source-db "$CLICKHOUSE_DATABASE" \\\n  --target-db "$ch_target"\ncleanup_clickhouse="$ch_target"\n\necho "==> Redis restore verification"\n"$SCRIPT_DIR/restore-redis.sh" --mode verify\n\nif [ -n "$MINIO_BUCKET" ]; then\n  echo "==> MinIO restore smoke test"\n  "$SCRIPT_DIR/restore-minio.sh" \\\n    --bucket "$MINIO_BUCKET" \\\n    --target-bucket "${MINIO_BUCKET}-restore-smoke-${timestamp}"\nelse\n  echo "==> MINIO_BUCKET is unset; skipping MinIO restore smoke test"\nfi\n\ncat <<EOF\n\nRestore smoke tests completed.\n\nTemporary databases were intentionally retained for inspection:\n  PostgreSQL: $cleanup_postgres\n  ClickHouse: $cleanup_clickhouse\n\nDelete after inspection:\n\n  kubectl -n data exec statefulset/postgres -- \\\n    dropdb --username postgres "$cleanup_postgres"\n\n  kubectl -n data exec statefulset/clickhouse -- \\\n    clickhouse-client --query \\\n    \'DROP DATABASE IF EXISTS \\`$cleanup_clickhouse\\`\'\nEOF\n'}, 'sops-check.sh': {'interpreter': 'sh', 'body': 'set -eu\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml is missing; run ./scripts/sops-init.sh"\n\ncase "$(grep -E \'^[[:space:]]*age:[[:space:]]*age1\' .sops.yaml | wc -l | tr -d \' \')" in\n  0) die ".sops.yaml does not contain an age recipient" ;;\nesac\n\nfailed=0\nfound=0\n\n# Git-tracked secret manifests only. Examples and Helm templates are excluded.\nfiles="$(\n  git ls-files \\\n    \'*secret.yaml\' \\\n    \'*secret.yml\' \\\n    \'*.secret.yaml\' \\\n    \'*.secret.yml\' \\\n  | grep -Ev \\\n      \'(^|/)(examples?|templates?)/|[.]example([.]|$)|secret-example[.]ya?ml$\' \\\n  || true\n)"\n\nfor file in $files; do\n  found=$((found + 1))\n\n  if ! grep -q \'^kind:[[:space:]]*Secret[[:space:]]*$\' "$file"; then\n    printf \'not a Kubernetes Secret: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  if ! grep -q \'^sops:[[:space:]]*$\' "$file"; then\n    printf \'missing SOPS metadata: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  if ! grep -q \'ENC\\[AES256_GCM\' "$file"; then\n    printf \'plaintext or malformed SOPS secret: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  # MAC/decryption validation. Does not print plaintext.\n  if ! sops --decrypt "$file" >/dev/null; then\n    printf \'cannot decrypt or authenticate: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  printf \'ok: %s\\n\' "$file"\ndone\n\nif [ "$found" -eq 0 ]; then\n  printf \'warning: no tracked production *.secret.yaml files found\\n\' >&2\nfi\n\n[ "$failed" -eq 0 ] || die "SOPS validation failed"\n'}, 'sops-create-app-secret.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nENV_FILE="${1:-}"\nOUTPUT="${2:-clusters/production/casinoshiz/casinoshiz.secret.yaml}"\nNAMESPACE="${NAMESPACE:-casinoshiz}"\nNAME="${NAME:-casinoshiz-secrets}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v kubectl >/dev/null 2>&1 || die "kubectl is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml missing; run ./scripts/sops-init.sh"\n[ -n "$ENV_FILE" ] || die "usage: $0 path/to/production.env [output.secret.yaml]"\n[ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"\n\nmkdir -p "$(dirname "$OUTPUT")"\n\nkubectl create secret generic "$NAME" \\\n  --namespace "$NAMESPACE" \\\n  --from-env-file="$ENV_FILE" \\\n  --dry-run=client \\\n  -o yaml > "$OUTPUT"\n\nsops --encrypt --in-place "$OUTPUT"\nprintf \'created encrypted application secret: %s\\n\' "$OUTPUT"\n'}, 'sops-create-ghcr-secret.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nNAMESPACE="${NAMESPACE:-casinoshiz}"\nNAME="${NAME:-ghcr-pull}"\nOUTPUT="${OUTPUT:-clusters/production/casinoshiz/ghcr.secret.yaml}"\nGHCR_SERVER="${GHCR_SERVER:-ghcr.io}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v kubectl >/dev/null 2>&1 || die "kubectl is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml missing; run ./scripts/sops-init.sh"\n[ -n "${GHCR_USERNAME:-}" ] || die "GHCR_USERNAME is required"\n[ -n "${GHCR_TOKEN:-}" ] || die "GHCR_TOKEN is required"\n\nmkdir -p "$(dirname "$OUTPUT")"\n\nkubectl create secret docker-registry "$NAME" \\\n  --namespace "$NAMESPACE" \\\n  --docker-server "$GHCR_SERVER" \\\n  --docker-username "$GHCR_USERNAME" \\\n  --docker-password "$GHCR_TOKEN" \\\n  --dry-run=client \\\n  -o yaml > "$OUTPUT"\n\nsops --encrypt --in-place "$OUTPUT"\nunset GHCR_TOKEN\n\nprintf \'created encrypted GHCR pull secret: %s\\n\' "$OUTPUT"\n'}, 'sops-encrypt.sh': {'interpreter': 'sh', 'body': 'set -eu\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml is missing; run ./scripts/sops-init.sh"\n\n[ "$#" -gt 0 ] || {\n  cat <<\'EOF\'\nUsage:\n  ./scripts/sops-encrypt.sh path/to/file.secret.yaml [...]\n\nEach file must be a Kubernetes Secret YAML containing data or stringData.\nThe file is encrypted in place after validation.\nEOF\n  exit 2\n}\n\nfor file in "$@"; do\n  [ -f "$file" ] || die "file not found: $file"\n\n  kind="$(awk \'$1 == "kind:" { print $2; exit }\' "$file")"\n  [ "$kind" = Secret ] || die "$file is not a Kubernetes Secret"\n\n  if grep -q \'ENC\\[AES256_GCM\' "$file"; then\n    printf \'already encrypted: %s\\n\' "$file"\n    continue\n  fi\n\n  sops --encrypt --in-place "$file"\n  grep -q \'ENC\\[AES256_GCM\' "$file" ||\n    die "encryption marker not found after encrypting $file"\n\n  printf \'encrypted: %s\\n\' "$file"\ndone\n'}, 'sops-init.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nAGE_KEY_FILE="${AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"\nOUTPUT="${OUTPUT:-.sops.yaml}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v age-keygen >/dev/null 2>&1 || die "age-keygen is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n\nif [ ! -f "$AGE_KEY_FILE" ]; then\n  mkdir -p "$(dirname "$AGE_KEY_FILE")"\n  chmod 700 "$(dirname "$AGE_KEY_FILE")"\n  age-keygen -o "$AGE_KEY_FILE"\n  chmod 600 "$AGE_KEY_FILE"\nfi\n\nrecipient="$(age-keygen -y "$AGE_KEY_FILE")"\ncase "$recipient" in\n  age1*) ;;\n  *) die "invalid age recipient derived from $AGE_KEY_FILE" ;;\nesac\n\ncat > "$OUTPUT" <<EOF\ncreation_rules:\n  - path_regex: \'(^|/).*[.]secret[.]ya?ml$\'\n    encrypted_regex: \'^(data|stringData)$\'\n    age: $recipient\n\n  - path_regex: \'(^|/).*ghcr.*[.]ya?ml$\'\n    encrypted_regex: \'^(data|stringData)$\'\n    age: $recipient\nEOF\n\nprintf \'created %s for recipient %s\\n\' "$OUTPUT" "$recipient"\nprintf \'private identity remains at %s\\n\' "$AGE_KEY_FILE"\n'}}
++SCRIPTS = {'cluster-status.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\necho "== Nodes =="\nkubectl get nodes -o wide\n\necho\necho "== Argo CD =="\nif command -v kubectl >/dev/null 2>&1; then\n  kubectl get applications -n argocd\nelse\n  echo "Argo CD applications are not available"\nfi\n\necho\necho "== Workloads =="\nkubectl get deployments,statefulsets -A\n\necho\necho "== Pods not Running or Completed =="\nkubectl get pods -A \\\n  --field-selector=status.phase!=Running,status.phase!=Succeeded \\\n  || true\n\necho\necho "== PVCs =="\nkubectl get pvc -A\n\necho\necho "== Ingresses =="\nkubectl get ingress -A\n\necho\necho "== Certificates =="\nkubectl get certificates -A 2>/dev/null || true\n\necho\necho "== Data Jobs =="\nkubectl get cronjobs,jobs -n data\n\necho\necho "== Recent warning events =="\nkubectl get events -A \\\n  --field-selector=type=Warning \\\n  --sort-by=.lastTimestamp \\\n  | tail -n 50\n'}, 'local-cluster-create.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ncluster="${K3D_CLUSTER_NAME:-casinoshiz-local}"\nregistry="k3d-casinoshiz-registry.localhost"\nregistry_port="${K3D_REGISTRY_PORT:-5005}"\n\nif ! docker info >/dev/null 2>&1; then\n  echo "Docker daemon is not available." >&2\n  exit 1\nfi\n\nif ! k3d registry list | grep -q "${registry}"; then\n  k3d registry create casinoshiz-registry.localhost \\\n    --port "${registry_port}"\nfi\n\nif ! k3d cluster list | grep -q "^${cluster}[[:space:]]"; then\n  k3d cluster create "${cluster}" \\\n    --servers 1 \\\n    --agents 0 \\\n    --registry-use "${registry}:${registry_port}" \\\n    --port "8080:80@loadbalancer" \\\n    --port "8443:443@loadbalancer" \\\n    --wait\nfi\n\nkubectl config use-context "k3d-${cluster}"\nkubectl get nodes\n'}, 'local-cluster-delete.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ncluster="${K3D_CLUSTER_NAME:-casinoshiz-local}"\n\nk3d cluster delete "${cluster}" || true\n\nif [[ "${DELETE_LOCAL_REGISTRY:-false}" == "true" ]]; then\n  k3d registry delete casinoshiz-registry.localhost || true\nfi\n'}, 'local-argocd-bootstrap.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nage_key_file="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"\n[[ -f "${age_key_file}" ]] || { echo "Age key not found: ${age_key_file}" >&2; exit 1; }\n\nkubectl apply -f argocd/namespace.yaml\nkubectl create secret generic sops-age \\\n  --namespace=argocd \\\n  --from-file=keys.txt="${age_key_file}" \\\n  --dry-run=client -o yaml | kubectl apply -f -\nkubectl apply -f argocd/cmp-plugin.yaml\nhelm repo add argo https://argoproj.github.io/argo-helm --force-update\nhelm repo update\nhelm upgrade --install argocd argo/argo-cd \\\n  --namespace argocd --create-namespace \\\n  --values argocd/values.yaml \\\n  --wait --timeout 15m\nkubectl apply -f argocd/project.yaml\nkubectl apply -f argocd/root-local.yaml\nkubectl get applications -n argocd\n'}, 'local-image-push.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nif (($# != 2)); then\n  echo "Usage: $0 <source-image:tag> <target-repository>" >&2\n  echo "Example: $0 casinoshiz-backend:latest casinoshiz-backend" >&2\n  exit 2\nfi\n\nsource_image="$1"\ntarget_repository="$2"\nhost_registry="${LOCAL_REGISTRY_HOST:-localhost:5005}"\ntarget="${host_registry}/${target_repository}:local"\n\ndocker image inspect "${source_image}" >/dev/null\ndocker tag "${source_image}" "${target}"\ndocker push "${target}"\n\necho "Pushed ${target}"\n'}, 'manual-backup.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\ntimestamp="$(date +%s)"\ncronjobs=(\n  postgres-backup\n  redis-backup\n  clickhouse-backup\n  minio-backup\n)\n\njobs=()\n\nfor cronjob in "${cronjobs[@]}"; do\n  job="${cronjob}-manual-${timestamp}"\n  kubectl create job \\\n    --from="cronjob/${cronjob}" \\\n    "$job" \\\n    -n data\n  jobs+=("$job")\ndone\n\nfor job in "${jobs[@]}"; do\n  kubectl wait \\\n    --for=condition=complete \\\n    "job/${job}" \\\n    -n data \\\n    --timeout=30m\n\n  kubectl logs \\\n    "job/${job}" \\\n    -n data\ndone\n\necho "All manual backup Jobs completed."\n'}, 'post-deploy-check.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nwait_timeout="${WAIT_TIMEOUT:-300s}"\n\necho "Checking Argo CD..."\nif command -v kubectl >/dev/null 2>&1; then\n  kubectl get applications -n argocd\nfi\n\necho "Waiting for data StatefulSets..."\nfor statefulset in postgres redis clickhouse minio; do\n  kubectl rollout status "statefulset/${statefulset}" \\\n    -n data \\\n    --timeout="${wait_timeout}"\ndone\n\necho "Waiting for CasinoShiz Deployments..."\nwhile IFS= read -r deployment; do\n  kubectl rollout status "$deployment" \\\n    -n casinoshiz \\\n    --timeout="${wait_timeout}"\ndone < <(kubectl get deployments -n casinoshiz -o name)\n\necho "Checking PVCs..."\nkubectl get pvc -A\n\nunbound="$(\n  kubectl get pvc -A \\\n    -o jsonpath=\'{range .items[?(@.status.phase!="Bound")]}{.metadata.namespace}/{.metadata.name}{"\\n"}{end}\'\n)"\nif [[ -n "$unbound" ]]; then\n  printf \'Unbound PVCs:\\n%s\\n\' "$unbound" >&2\n  exit 1\nfi\n\necho "Checking certificates..."\nkubectl get certificates -A\n\necho "Checking ingresses..."\nkubectl get ingress -A\n\necho "Checking backup CronJobs..."\nkubectl get cronjobs -n data\n\necho "Checking observability..."\nkubectl get pods -n monitoring\nkubectl get pods -n observability\n\necho "Checking application health from inside the cluster..."\nfor service in telegram-bff admin-bff rest-api; do\n  kubectl run "health-${service}-$(date +%s)" \\\n    --rm \\\n    --restart=Never \\\n    --image=curlimages/curl:8.12.1 \\\n    -n casinoshiz \\\n    -- \\\n    -fsS "http://${service}.casinoshiz.svc.cluster.local:8080/health/ready"\ndone\n\necho "Post-deployment checks passed."\n'}, 'preflight.sh': {'interpreter': 'bash', 'body': 'set -euo pipefail\n\nrequired=(git helm kustomize kubectl go-task ansible-playbook)\nmissing=()\n\nfor tool in "${required[@]}"; do\n  if ! command -v "$tool" >/dev/null 2>&1; then\n    missing+=("$tool")\n  fi\ndone\n\nif ((${#missing[@]} > 0)); then\n  printf \'Missing required tools: %s\\n\' "${missing[*]}" >&2\n  exit 1\nfi\n\nif [[ ! -f Taskfile.yml ]]; then\n  echo "Run this script from the repository root." >&2\n  exit 1\nfi\n\necho "Validating repository..."\ngo-task clean\ngo-task validate\n\necho "Checking unresolved placeholders..."\nplaceholders="$(git grep -n CHANGE_ME || true)"\nif [[ -n "$placeholders" ]]; then\n  printf \'%s\\n\' "$placeholders"\n  echo "Unresolved CHANGE_ME values remain." >&2\n  exit 1\nfi\n\necho "Checking repository state..."\nif [[ -n "$(git status --porcelain)" ]]; then\n  git status --short\n  echo "Working tree is not clean." >&2\n  exit 1\nfi\n\necho "Checking Kubernetes access..."\nkubectl version --client\nkubectl cluster-info\nkubectl get nodes\n\necho "Preflight passed."\n'}, 'restore-clickhouse.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nSOURCE_DATABASE="${SOURCE_DATABASE:-cazinoshiz}"\nTARGET_DATABASE="${TARGET_DATABASE:-}"\nDROP_TARGET="${DROP_TARGET:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-clickhouse.sh [options]\n\nOptions:\n  --backup NAME          ClickHouse Disk backup name or "latest".\n  --source-db NAME       Source database stored in backup.\n  --target-db NAME       Target database. Defaults to a timestamped restore DB.\n  --drop-target          Drop an existing target database.\n  --keep-job             Keep the Job after completion.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --source-db) SOURCE_DATABASE="$2"; shift 2 ;;\n    --target-db) TARGET_DATABASE="$2"; shift 2 ;;\n    --drop-target) DROP_TARGET=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\nfor value in "$SOURCE_DATABASE" "${TARGET_DATABASE:-placeholder}"; do\n  case "$value" in\n    *[!a-zA-Z0-9_]*|\'\') die "invalid database identifier: $value" ;;\n  esac\ndone\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir clickhouse)"\nfi\n\nif [ -z "$TARGET_DATABASE" ]; then\n  TARGET_DATABASE="${SOURCE_DATABASE}_restore_$(date -u +%Y%m%d%H%M%S)"\nfi\n\nJOB="clickhouse-restore-$(date +%s)"\nDROP_QUERY=""\nif [ "$DROP_TARGET" = true ]; then\n  DROP_QUERY="DROP DATABASE IF EXISTS \\\\\\`$TARGET_DATABASE\\\\\\`;"\nfi\n\ninfo "Restoring ClickHouse $SOURCE_DATABASE from $BACKUP into $TARGET_DATABASE"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: clickhouse/clickhouse-server:24.8-alpine\n          env:\n            - name: CLICKHOUSE_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: clickhouse-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              client() {\n                clickhouse-client \\\n                  --host clickhouse.data.svc.cluster.local \\\n                  --password "\\$CLICKHOUSE_PASSWORD" \\\n                  --multiquery \\\n                  --query "\\$1"\n              }\n\n              client "$DROP_QUERY"\n\n              existing="\\$(clickhouse-client \\\n                --host clickhouse.data.svc.cluster.local \\\n                --password "\\$CLICKHOUSE_PASSWORD" \\\n                --query "EXISTS DATABASE \\\\\\`$TARGET_DATABASE\\\\\\`")"\n              test "\\$existing" = 0 || {\n                echo "target database already exists: $TARGET_DATABASE" >&2\n                exit 1\n              }\n\n              client "RESTORE DATABASE \\\\\\`$SOURCE_DATABASE\\\\\\`\n                AS \\\\\\`$TARGET_DATABASE\\\\\\`\n                FROM Disk(\'backup\', \'$BACKUP\')"\n\n              tables="\\$(clickhouse-client \\\n                --host clickhouse.data.svc.cluster.local \\\n                --password "\\$CLICKHOUSE_PASSWORD" \\\n                --query "SELECT count() FROM system.tables WHERE database = \'$TARGET_DATABASE\'")"\n              test "\\$tables" -gt 0\n              echo "restored database=$TARGET_DATABASE tables=\\$tables"\nYAML\n\nwait_job "$JOB" 1800s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "ClickHouse restore completed: $TARGET_DATABASE"\n'}, 'restore-minio.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nSOURCE_BUCKET="${SOURCE_BUCKET:-}"\nTARGET_BUCKET="${TARGET_BUCKET:-}"\nOVERWRITE="${OVERWRITE:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-minio.sh --bucket NAME [options]\n\nOptions:\n  --backup NAME          Backup directory or "latest".\n  --bucket NAME          Source bucket directory inside the backup.\n  --target-bucket NAME   Destination bucket. Defaults to a timestamped name.\n  --overwrite            Allow mirroring into an existing target bucket.\n  --keep-job             Keep the Job.\n\nBy default this restores into a new bucket and does not overwrite production.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --bucket) SOURCE_BUCKET="$2"; shift 2 ;;\n    --target-bucket) TARGET_BUCKET="$2"; shift 2 ;;\n    --overwrite) OVERWRITE=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\n[ -n "$SOURCE_BUCKET" ] || die "--bucket is required"\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir minio)"\nfi\n\nif [ -z "$TARGET_BUCKET" ]; then\n  TARGET_BUCKET="${SOURCE_BUCKET}-restore-$(date -u +%Y%m%d%H%M%S)"\nfi\n\nJOB="minio-restore-$(date +%s)"\nMIRROR_FLAG=""\nif [ "$OVERWRITE" = true ]; then\n  MIRROR_FLAG="--overwrite"\nfi\n\ninfo "Restoring MinIO bucket $SOURCE_BUCKET from $BACKUP into $TARGET_BUCKET"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: minio/mc:RELEASE.2025-08-13T08-35-41Z\n          env:\n            - name: MINIO_ROOT_USER\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: minio-root-user\n            - name: MINIO_ROOT_PASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: minio-root-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              src="/backup/minio/$BACKUP/$SOURCE_BUCKET"\n              test -d "\\$src"\n\n              mc alias set target \\\n                http://minio.data.svc.cluster.local:9000 \\\n                "\\$MINIO_ROOT_USER" \\\n                "\\$MINIO_ROOT_PASSWORD"\n\n              if mc stat "target/$TARGET_BUCKET" >/dev/null 2>&1; then\n                test "$OVERWRITE" = true || {\n                  echo "target bucket already exists: $TARGET_BUCKET" >&2\n                  exit 1\n                }\n              else\n                mc mb "target/$TARGET_BUCKET"\n              fi\n\n              mc mirror $MIRROR_FLAG "\\$src" "target/$TARGET_BUCKET"\n\n              local_count="\\$(find "\\$src" -type f | wc -l | tr -d \' \')"\n              remote_count="\\$(mc find "target/$TARGET_BUCKET" --type f | wc -l | tr -d \' \')"\n              test "\\$remote_count" -ge "\\$local_count"\n              echo "restored bucket=$TARGET_BUCKET objects=\\$remote_count"\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\nwait_job "$JOB" 1800s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "MinIO restore completed: $TARGET_BUCKET"\n'}, 'restore-postgres.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nDATABASE="${DATABASE:-backend}"\nTARGET_DATABASE="${TARGET_DATABASE:-}"\nDROP_TARGET="${DROP_TARGET:-false}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-postgres.sh [options]\n\nOptions:\n  --backup NAME          Backup directory name or "latest".\n  --database NAME        Source dump name, default: backend.\n  --target NAME          Target database. Default: <database>_restore_<timestamp>.\n  --drop-target          Drop an existing target database before restore.\n  --keep-job             Keep the Kubernetes Job after completion.\n\nEnvironment:\n  NAMESPACE=data\n  BACKUP_PVC=data-backups\n\nThe production database is never overwritten unless --target explicitly names it.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --database) DATABASE="$2"; shift 2 ;;\n    --target) TARGET_DATABASE="$2"; shift 2 ;;\n    --drop-target) DROP_TARGET=true; shift ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\ncase "$DATABASE" in\n  *[!a-zA-Z0-9_]*|\'\') die "invalid database name: $DATABASE" ;;\nesac\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir postgres)"\nfi\n\nif [ -z "$TARGET_DATABASE" ]; then\n  TARGET_DATABASE="${DATABASE}_restore_$(date -u +%Y%m%d%H%M%S)"\nfi\n\ncase "$TARGET_DATABASE" in\n  *[!a-zA-Z0-9_]*|\'\') die "invalid target database name: $TARGET_DATABASE" ;;\nesac\n\nJOB="postgres-restore-$(date +%s)"\nDROP_SQL=""\nif [ "$DROP_TARGET" = true ]; then\n  DROP_SQL="DROP DATABASE IF EXISTS \\"$TARGET_DATABASE\\" WITH (FORCE);"\nfi\n\ninfo "Restoring PostgreSQL $DATABASE from $BACKUP into $TARGET_DATABASE"\n\ncat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\n  labels:\n    app.kubernetes.io/name: postgres-restore\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: postgres-restore\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: restore\n          image: postgres:16-alpine\n          env:\n            - name: PGHOST\n              value: postgres.data.svc.cluster.local\n            - name: PGUSER\n              value: postgres\n            - name: PGPASSWORD\n              valueFrom:\n                secretKeyRef:\n                  name: data-secrets\n                  key: postgres-superuser-password\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              backup_dir="/backup/postgres/$BACKUP"\n              dump="\\$backup_dir/$DATABASE.dump"\n              test -s "\\$dump"\n\n              if test -f "\\$backup_dir/SHA256SUMS"; then\n                cd "\\$backup_dir"\n                sha256sum -c SHA256SUMS\n              fi\n\n              psql --dbname=postgres --set=ON_ERROR_STOP=1 <<\'SQL\'\n              $DROP_SQL\nSQL\n\n              exists="\\$(psql --dbname=postgres --tuples-only --no-align \\\n                --command "SELECT 1 FROM pg_database WHERE datname = \'$TARGET_DATABASE\'")"\n              test -z "\\$exists" || {\n                echo "target database already exists: $TARGET_DATABASE" >&2\n                exit 1\n              }\n\n              createdb "$TARGET_DATABASE"\n              pg_restore \\\n                --exit-on-error \\\n                --no-owner \\\n                --no-privileges \\\n                --dbname="$TARGET_DATABASE" \\\n                "\\$dump"\n\n              tables="\\$(psql --dbname="$TARGET_DATABASE" --tuples-only --no-align \\\n                --command "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname NOT IN (\'pg_catalog\',\'information_schema\')")"\n              test "\\$tables" -gt 0\n              echo "restored database=$TARGET_DATABASE tables=\\$tables"\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\nwait_job "$JOB" 900s\n\nif [ "$KEEP_JOB" != true ]; then\n  kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\nfi\n\ninfo "PostgreSQL restore completed: $TARGET_DATABASE"\n'}, 'restore-redis.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nset -eu\n\nNAMESPACE="${NAMESPACE:-data}"\nBACKUP_PVC="${BACKUP_PVC:-data-backups}"\n\ndie() {\n  printf \'error: %s\n\' "$*" >&2\n  exit 1\n}\n\ninfo() {\n  printf \'==> %s\n\' "$*"\n}\n\nrequire_command() {\n  command -v "$1" >/dev/null 2>&1 || die "missing command: $1"\n}\n\nlatest_backup_dir() {\n  kind="$1"\n  kubectl -n "$NAMESPACE" run "backup-lister-$$" \\\n    --restart=Never \\\n    --image=alpine:3.22 \\\n    --overrides="$(\n      cat <<JSON\n{\n  "spec": {\n    "containers": [{\n      "name": "lister",\n      "image": "alpine:3.22",\n      "command": ["/bin/sh", "-ec", "find /backup/$kind -mindepth 1 -maxdepth 1 -type d -printf \'%f\\n\' | sort | tail -n 1"],\n      "volumeMounts": [{"name": "backups", "mountPath": "/backup"}]\n    }],\n    "volumes": [{"name": "backups", "persistentVolumeClaim": {"claimName": "$BACKUP_PVC"}}]\n  }\n}\nJSON\n    )" >/dev/null\n\n  kubectl -n "$NAMESPACE" wait \\\n    --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n    "pod/backup-lister-$$" \\\n    --timeout=90s >/dev/null\n\n  result="$(kubectl -n "$NAMESPACE" logs "pod/backup-lister-$$")"\n  kubectl -n "$NAMESPACE" delete pod "backup-lister-$$" --wait=false >/dev/null 2>&1 || true\n  [ -n "$result" ] || die "no backup directories found for $kind"\n  printf \'%s\n\' "$result"\n}\n\nwait_job() {\n  job="$1"\n  timeout="${2:-600s}"\n  kubectl -n "$NAMESPACE" wait \\\n    --for=condition=complete \\\n    "job/$job" \\\n    --timeout="$timeout" || {\n      kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true || true\n      return 1\n    }\n  kubectl -n "$NAMESPACE" logs "job/$job" --all-containers=true\n}\n\n\nrequire_command kubectl\n\nBACKUP="${BACKUP:-latest}"\nMODE="${MODE:-verify}"\nCONFIRM="${CONFIRM:-}"\nKEEP_JOB="${KEEP_JOB:-false}"\n\nusage() {\n  cat <<\'EOF\'\nUsage:\n  restore-redis.sh [options]\n\nOptions:\n  --backup NAME          Backup directory or "latest".\n  --mode verify          Start an isolated Redis and validate the RDB (default).\n  --mode replace         Replace the production Redis PVC contents.\n  --confirm REPLACE_REDIS\n                        Required with --mode replace.\n  --keep-job             Keep the verification Job.\n\n`replace` scales the Redis StatefulSet to zero, rewrites its PVC and starts it.\nUse only during a maintenance window.\nEOF\n}\n\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --backup) BACKUP="$2"; shift 2 ;;\n    --mode) MODE="$2"; shift 2 ;;\n    --confirm) CONFIRM="$2"; shift 2 ;;\n    --keep-job) KEEP_JOB=true; shift ;;\n    -h|--help) usage; exit 0 ;;\n    *) die "unknown argument: $1" ;;\n  esac\ndone\n\nif [ "$BACKUP" = latest ]; then\n  BACKUP="$(latest_backup_dir redis)"\nfi\n\ncase "$MODE" in\n  verify)\n    JOB="redis-restore-verify-$(date +%s)"\n    info "Verifying Redis backup $BACKUP in an isolated instance"\n\n    cat <<YAML | kubectl apply -f -\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: $JOB\n  namespace: $NAMESPACE\nspec:\n  backoffLimit: 0\n  ttlSecondsAfterFinished: 3600\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: verify\n          image: redis:7-alpine\n          command:\n            - /bin/sh\n            - -ec\n            - |\n              src="/backup/redis/$BACKUP"\n              test -s "\\$src/dump.rdb"\n              mkdir -p /restore\n              cp "\\$src/dump.rdb" /restore/dump.rdb\n\n              if test -f "\\$src/SHA256SUMS"; then\n                cd "\\$src"\n                sha256sum -c SHA256SUMS || true\n              fi\n\n              redis-check-rdb /restore/dump.rdb\n              redis-server \\\n                --dir /restore \\\n                --dbfilename dump.rdb \\\n                --appendonly no \\\n                --protected-mode no \\\n                --bind 127.0.0.1 \\\n                --daemonize yes\n\n              for attempt in \\$(seq 1 30); do\n                redis-cli -h 127.0.0.1 ping >/dev/null 2>&1 && break\n                sleep 1\n              done\n\n              redis-cli -h 127.0.0.1 ping\n              keys="\\$(redis-cli -h 127.0.0.1 dbsize | tr -d \'\\r\')"\n              echo "verified backup=$BACKUP keys=\\$keys"\n              redis-cli -h 127.0.0.1 shutdown nosave\n          volumeMounts:\n            - name: backups\n              mountPath: /backup\n              readOnly: true\n      volumes:\n        - name: backups\n          persistentVolumeClaim:\n            claimName: $BACKUP_PVC\nYAML\n\n    wait_job "$JOB" 600s\n    if [ "$KEEP_JOB" != true ]; then\n      kubectl -n "$NAMESPACE" delete job "$JOB" --wait=false >/dev/null\n    fi\n    ;;\n\n  replace)\n    [ "$CONFIRM" = REPLACE_REDIS ] || die \\\n      "--mode replace requires --confirm REPLACE_REDIS"\n\n    info "Scaling Redis StatefulSet to zero"\n    kubectl -n "$NAMESPACE" scale statefulset redis --replicas=0\n    kubectl -n "$NAMESPACE" wait \\\n      --for=delete pod/redis-0 \\\n      --timeout=180s || true\n\n    POD="redis-restore-copy-$(date +%s)"\n    info "Replacing production Redis data from backup $BACKUP"\n    cat <<YAML | kubectl apply -f -\napiVersion: v1\nkind: Pod\nmetadata:\n  name: $POD\n  namespace: $NAMESPACE\nspec:\n  restartPolicy: Never\n  containers:\n    - name: restore\n      image: redis:7-alpine\n      command:\n        - /bin/sh\n        - -ec\n        - |\n          src="/backup/redis/$BACKUP"\n          test -s "\\$src/dump.rdb"\n          redis-check-rdb "\\$src/dump.rdb"\n\n          find /redis-data -mindepth 1 -maxdepth 1 -exec rm -rf {} +\n          cp "\\$src/dump.rdb" /redis-data/dump.rdb\n\n          if test -d "\\$src/appendonlydir"; then\n            cp -a "\\$src/appendonlydir" /redis-data/\n          fi\n\n          chown -R 999:999 /redis-data\n          echo "production Redis PVC replaced"\n      volumeMounts:\n        - name: backups\n          mountPath: /backup\n          readOnly: true\n        - name: redis-data\n          mountPath: /redis-data\n  volumes:\n    - name: backups\n      persistentVolumeClaim:\n        claimName: $BACKUP_PVC\n    - name: redis-data\n      persistentVolumeClaim:\n        claimName: data-redis-0\nYAML\n\n    kubectl -n "$NAMESPACE" wait \\\n      --for=jsonpath=\'{.status.phase}\'=Succeeded \\\n      "pod/$POD" \\\n      --timeout=300s || {\n        kubectl -n "$NAMESPACE" logs "$POD" || true\n        die "Redis restore copy failed; StatefulSet remains scaled down"\n      }\n    kubectl -n "$NAMESPACE" logs "$POD"\n    kubectl -n "$NAMESPACE" delete pod "$POD" --wait=false >/dev/null\n\n    info "Starting Redis StatefulSet"\n    kubectl -n "$NAMESPACE" scale statefulset redis --replicas=1\n    kubectl -n "$NAMESPACE" rollout status statefulset/redis --timeout=300s\n    ;;\n\n  *) die "mode must be verify or replace" ;;\nesac\n'}, 'restore-smoke-test.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n\nPOSTGRES_DATABASE="${POSTGRES_DATABASE:-backend}"\nCLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-cazinoshiz}"\nMINIO_BUCKET="${MINIO_BUCKET:-}"\n\ncleanup_postgres=""\ncleanup_clickhouse=""\n\ntimestamp="$(date -u +%Y%m%d%H%M%S)"\npg_target="${POSTGRES_DATABASE}_restore_smoke_${timestamp}"\nch_target="${CLICKHOUSE_DATABASE}_restore_smoke_${timestamp}"\n\necho "==> PostgreSQL restore smoke test"\n"$SCRIPT_DIR/restore-postgres.sh" \\\n  --database "$POSTGRES_DATABASE" \\\n  --target "$pg_target"\ncleanup_postgres="$pg_target"\n\necho "==> ClickHouse restore smoke test"\n"$SCRIPT_DIR/restore-clickhouse.sh" \\\n  --source-db "$CLICKHOUSE_DATABASE" \\\n  --target-db "$ch_target"\ncleanup_clickhouse="$ch_target"\n\necho "==> Redis restore verification"\n"$SCRIPT_DIR/restore-redis.sh" --mode verify\n\nif [ -n "$MINIO_BUCKET" ]; then\n  echo "==> MinIO restore smoke test"\n  "$SCRIPT_DIR/restore-minio.sh" \\\n    --bucket "$MINIO_BUCKET" \\\n    --target-bucket "${MINIO_BUCKET}-restore-smoke-${timestamp}"\nelse\n  echo "==> MINIO_BUCKET is unset; skipping MinIO restore smoke test"\nfi\n\ncat <<EOF\n\nRestore smoke tests completed.\n\nTemporary databases were intentionally retained for inspection:\n  PostgreSQL: $cleanup_postgres\n  ClickHouse: $cleanup_clickhouse\n\nDelete after inspection:\n\n  kubectl -n data exec statefulset/postgres -- \\\n    dropdb --username postgres "$cleanup_postgres"\n\n  kubectl -n data exec statefulset/clickhouse -- \\\n    clickhouse-client --query \\\n    \'DROP DATABASE IF EXISTS \\`$cleanup_clickhouse\\`\'\nEOF\n'}, 'sops-check.sh': {'interpreter': 'sh', 'body': 'set -eu\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml is missing; run ./scripts/sops-init.sh"\n\ncase "$(grep -E \'^[[:space:]]*age:[[:space:]]*age1\' .sops.yaml | wc -l | tr -d \' \')" in\n  0) die ".sops.yaml does not contain an age recipient" ;;\nesac\n\nfailed=0\nfound=0\n\n# Git-tracked secret manifests only. Examples and Helm templates are excluded.\nfiles="$(\n  git ls-files \\\n    \'*secret.yaml\' \\\n    \'*secret.yml\' \\\n    \'*.secret.yaml\' \\\n    \'*.secret.yml\' \\\n  | grep -Ev \\\n      \'(^|/)(examples?|templates?)/|[.]example([.]|$)|secret-example[.]ya?ml$\' \\\n  || true\n)"\n\nfor file in $files; do\n  found=$((found + 1))\n\n  if ! grep -q \'^kind:[[:space:]]*Secret[[:space:]]*$\' "$file"; then\n    printf \'not a Kubernetes Secret: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  if ! grep -q \'^sops:[[:space:]]*$\' "$file"; then\n    printf \'missing SOPS metadata: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  if ! grep -q \'ENC\\[AES256_GCM\' "$file"; then\n    printf \'plaintext or malformed SOPS secret: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  # MAC/decryption validation. Does not print plaintext.\n  if ! sops --decrypt "$file" >/dev/null; then\n    printf \'cannot decrypt or authenticate: %s\\n\' "$file" >&2\n    failed=1\n    continue\n  fi\n\n  printf \'ok: %s\\n\' "$file"\ndone\n\nif [ "$found" -eq 0 ]; then\n  printf \'warning: no tracked production *.secret.yaml files found\\n\' >&2\nfi\n\n[ "$failed" -eq 0 ] || die "SOPS validation failed"\n'}, 'sops-create-app-secret.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nENV_FILE="${1:-}"\nOUTPUT="${2:-clusters/production/casinoshiz/casinoshiz.secret.yaml}"\nNAMESPACE="${NAMESPACE:-casinoshiz}"\nNAME="${NAME:-casinoshiz-secrets}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v kubectl >/dev/null 2>&1 || die "kubectl is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml missing; run ./scripts/sops-init.sh"\n[ -n "$ENV_FILE" ] || die "usage: $0 path/to/production.env [output.secret.yaml]"\n[ -f "$ENV_FILE" ] || die "env file not found: $ENV_FILE"\n\nmkdir -p "$(dirname "$OUTPUT")"\n\nkubectl create secret generic "$NAME" \\\n  --namespace "$NAMESPACE" \\\n  --from-env-file="$ENV_FILE" \\\n  --dry-run=client \\\n  -o yaml > "$OUTPUT"\n\nsops --encrypt --in-place "$OUTPUT"\nprintf \'created encrypted application secret: %s\\n\' "$OUTPUT"\n'}, 'sops-create-ghcr-secret.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nNAMESPACE="${NAMESPACE:-casinoshiz}"\nNAME="${NAME:-ghcr-pull}"\nOUTPUT="${OUTPUT:-clusters/production/casinoshiz/ghcr.secret.yaml}"\nGHCR_SERVER="${GHCR_SERVER:-ghcr.io}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v kubectl >/dev/null 2>&1 || die "kubectl is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml missing; run ./scripts/sops-init.sh"\n[ -n "${GHCR_USERNAME:-}" ] || die "GHCR_USERNAME is required"\n[ -n "${GHCR_TOKEN:-}" ] || die "GHCR_TOKEN is required"\n\nmkdir -p "$(dirname "$OUTPUT")"\n\nkubectl create secret docker-registry "$NAME" \\\n  --namespace "$NAMESPACE" \\\n  --docker-server "$GHCR_SERVER" \\\n  --docker-username "$GHCR_USERNAME" \\\n  --docker-password "$GHCR_TOKEN" \\\n  --dry-run=client \\\n  -o yaml > "$OUTPUT"\n\nsops --encrypt --in-place "$OUTPUT"\nunset GHCR_TOKEN\n\nprintf \'created encrypted GHCR pull secret: %s\\n\' "$OUTPUT"\n'}, 'sops-encrypt.sh': {'interpreter': 'sh', 'body': 'set -eu\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n[ -f .sops.yaml ] || die ".sops.yaml is missing; run ./scripts/sops-init.sh"\n\n[ "$#" -gt 0 ] || {\n  cat <<\'EOF\'\nUsage:\n  ./scripts/sops-encrypt.sh path/to/file.secret.yaml [...]\n\nEach file must be a Kubernetes Secret YAML containing data or stringData.\nThe file is encrypted in place after validation.\nEOF\n  exit 2\n}\n\nfor file in "$@"; do\n  [ -f "$file" ] || die "file not found: $file"\n\n  kind="$(awk \'$1 == "kind:" { print $2; exit }\' "$file")"\n  [ "$kind" = Secret ] || die "$file is not a Kubernetes Secret"\n\n  if grep -q \'ENC\\[AES256_GCM\' "$file"; then\n    printf \'already encrypted: %s\\n\' "$file"\n    continue\n  fi\n\n  sops --encrypt --in-place "$file"\n  grep -q \'ENC\\[AES256_GCM\' "$file" ||\n    die "encryption marker not found after encrypting $file"\n\n  printf \'encrypted: %s\\n\' "$file"\ndone\n'}, 'sops-init.sh': {'interpreter': 'sh', 'body': 'set -eu\n\nAGE_KEY_FILE="${AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"\nOUTPUT="${OUTPUT:-.sops.yaml}"\n\ndie() {\n  printf \'error: %s\\n\' "$*" >&2\n  exit 1\n}\n\ncommand -v age-keygen >/dev/null 2>&1 || die "age-keygen is required"\ncommand -v sops >/dev/null 2>&1 || die "sops is required"\n\nif [ ! -f "$AGE_KEY_FILE" ]; then\n  mkdir -p "$(dirname "$AGE_KEY_FILE")"\n  chmod 700 "$(dirname "$AGE_KEY_FILE")"\n  age-keygen -o "$AGE_KEY_FILE"\n  chmod 600 "$AGE_KEY_FILE"\nfi\n\nrecipient="$(age-keygen -y "$AGE_KEY_FILE")"\ncase "$recipient" in\n  age1*) ;;\n  *) die "invalid age recipient derived from $AGE_KEY_FILE" ;;\nesac\n\ncat > "$OUTPUT" <<EOF\ncreation_rules:\n  - path_regex: \'(^|/).*[.]secret[.]ya?ml$\'\n    encrypted_regex: \'^(data|stringData)$\'\n    age: $recipient\n\n  - path_regex: \'(^|/).*ghcr.*[.]ya?ml$\'\n    encrypted_regex: \'^(data|stringData)$\'\n    age: $recipient\nEOF\n\nprintf \'created %s for recipient %s\\n\' "$OUTPUT" "$recipient"\nprintf \'private identity remains at %s\\n\' "$AGE_KEY_FILE"\n'}}
+ 
+-COMMANDS = {('cluster', 'status'): ('cluster-status.sh', []), ('cluster', 'preflight'): ('preflight.sh', []), ('cluster', 'post-deploy'): ('post-deploy-check.sh', []), ('backup', 'run'): ('manual-backup.sh', []), ('restore', 'postgres'): ('restore-postgres.sh', None), ('restore', 'clickhouse'): ('restore-clickhouse.sh', None), ('restore', 'redis'): ('restore-redis.sh', None), ('restore', 'minio'): ('restore-minio.sh', None), ('restore', 'smoke'): ('restore-smoke-test.sh', []), ('sops', 'init'): ('sops-init.sh', None), ('sops', 'encrypt'): ('sops-encrypt.sh', None), ('sops', 'check'): ('sops-check.sh', []), ('sops', 'app-secret'): ('sops-create-app-secret.sh', None), ('sops', 'ghcr-secret'): ('sops-create-ghcr-secret.sh', []), ('local', 'create'): ('local-cluster-create.sh', []), ('local', 'delete'): ('local-cluster-delete.sh', []), ('local', 'flux-bootstrap'): ('local-flux-bootstrap.sh', []), ('local', 'image-push'): ('local-image-push.sh', None)}
++COMMANDS = {('cluster', 'status'): ('cluster-status.sh', []), ('cluster', 'preflight'): ('preflight.sh', []), ('cluster', 'post-deploy'): ('post-deploy-check.sh', []), ('backup', 'run'): ('manual-backup.sh', []), ('restore', 'postgres'): ('restore-postgres.sh', None), ('restore', 'clickhouse'): ('restore-clickhouse.sh', None), ('restore', 'redis'): ('restore-redis.sh', None), ('restore', 'minio'): ('restore-minio.sh', None), ('restore', 'smoke'): ('restore-smoke-test.sh', []), ('sops', 'init'): ('sops-init.sh', None), ('sops', 'encrypt'): ('sops-encrypt.sh', None), ('sops', 'check'): ('sops-check.sh', []), ('sops', 'app-secret'): ('sops-create-app-secret.sh', None), ('sops', 'ghcr-secret'): ('sops-create-ghcr-secret.sh', []), ('local', 'create'): ('local-cluster-create.sh', []), ('local', 'delete'): ('local-cluster-delete.sh', []), ('local', 'argocd-bootstrap'): ('local-argocd-bootstrap.sh', []), ('local', 'image-push'): ('local-image-push.sh', None)}
+ 
+ 
+ class InfraError(RuntimeError):
+@@ -83,7 +83,7 @@
+         "backup": "Run backup operations",
+         "restore": "Restore and restore-verification operations",
+         "sops": "SOPS/age initialization, encryption and Secret creation",
+-        "local": "Local k3d and Flux helpers",
++        "local": "Local k3d and Argo CD helpers",
+     }
+ 
+     commands = {
+@@ -112,7 +112,7 @@
+         "local": {
+             "create": "Create local k3d cluster and registry",
+             "delete": "Delete local k3d cluster",
+-            "flux-bootstrap": "Install Flux locally and configure SOPS",
++            "argocd-bootstrap": "Install Argo CD locally and configure SOPS",
+             "image-push": "Push an image to the local registry",
+         },
+     }
+diff -ruN '--exclude=.git' '--exclude=.task' a/scripts/installer.py b/scripts/installer.py
+--- a/scripts/installer.py	2026-07-17 12:06:47.000000000 +0000
++++ b/scripts/installer.py	2026-07-17 16:46:52.000000000 +0000
+@@ -2,7 +2,6 @@
+ from __future__ import annotations
+ 
+ import argparse
+-import getpass
+ import json
+ import os
+ import re
+@@ -123,7 +122,7 @@
+     ingress_profile: str = "traefik"
+     environment: str = "production"
+     run_ansible: bool = True
+-    bootstrap_flux: bool = True
++    bootstrap_argocd: bool = True
+     clone_application: bool = True
+     build_application_images: bool = False
+     wait_timeout_seconds: int = 1200
+@@ -211,7 +210,7 @@
+             ingress_profile=ingress,
+             environment=dict_get(raw, "deployment.environment", "production"),
+             run_ansible=bool(dict_get(raw, "deployment.run_ansible", True)),
+-            bootstrap_flux=bool(dict_get(raw, "deployment.bootstrap_flux", True)),
++            bootstrap_argocd=bool(dict_get(raw, "deployment.bootstrap_argocd", True)),
+             clone_application=bool(dict_get(raw, "deployment.clone_application", True)),
+             build_application_images=bool(
+                 dict_get(raw, "deployment.build_application_images", False)
+@@ -277,7 +276,7 @@
+         return args
+ 
+     def require_tools(self) -> None:
+-        required = ["ssh", "scp", "git", "ansible-playbook", "kubectl", "flux", "sops", "age-keygen"]
++        required = ["ssh", "scp", "git", "ansible-playbook", "kubectl", "helm", "sops", "age-keygen", "go-task"]
+         missing = [tool for tool in required if not command_exists(tool)]
+         if missing:
+             raise InstallError("Missing local tools: " + ", ".join(missing))
+@@ -322,7 +321,7 @@
+         print(f"Application:      {self.config.git.application_repo or '(not configured)'}")
+         print(f"Remote directory: {self.config.remote.workdir}")
+         print(f"Run Ansible:      {self.config.deployment.run_ansible}")
+-        print(f"Bootstrap Flux:   {self.config.deployment.bootstrap_flux}")
++        print(f"Bootstrap Argo CD:   {self.config.deployment.bootstrap_argocd}")
+         print()
+         if not ask_bool("Continue", True):
+             raise InstallError("Cancelled")
+@@ -510,14 +509,14 @@
+         age_key = Path(os.path.expanduser(self.config.sops.age_key_file))
+         if not age_key.exists():
+             raise InstallError(f"Age key does not exist: {age_key}")
+-        info("Installing age identity into flux-system")
++        info("Installing age identity into argocd")
+         if self.dry_run:
+             return
+ 
+         env = self.kubectl_env()
+-        run(["kubectl", "create", "namespace", "flux-system", "--dry-run=client", "-o", "yaml"], env=env, capture=True)
++        run(["kubectl", "create", "namespace", "argocd", "--dry-run=client", "-o", "yaml"], env=env, capture=True)
+         namespace_yaml = run(
+-            ["kubectl", "create", "namespace", "flux-system", "--dry-run=client", "-o", "yaml"],
++            ["kubectl", "create", "namespace", "argocd", "--dry-run=client", "-o", "yaml"],
+             env=env,
+             capture=True,
+         ).stdout
+@@ -531,8 +530,8 @@
+                 "generic",
+                 "sops-age",
+                 "-n",
+-                "flux-system",
+-                f"--from-file=age.agekey={age_key}",
++                "argocd",
++                f"--from-file=keys.txt={age_key}",
+                 "--dry-run=client",
+                 "-o",
+                 "yaml",
+@@ -543,39 +542,27 @@
+         ).stdout
+         run(["kubectl", "apply", "-f", "-"], env=env, input_text=secret_yaml, sensitive=True)
+ 
+-    def bootstrap_flux(self) -> None:
+-        if not self.config.deployment.bootstrap_flux:
+-            warn("Skipping Flux bootstrap")
++    def bootstrap_argocd(self) -> None:
++        if not self.config.deployment.bootstrap_argocd:
++            warn("Skipping Argo CD bootstrap")
+             return
+ 
+-        token = os.environ.get("GITHUB_TOKEN", "")
+-        if not token:
+-            token = getpass.getpass("GitHub token for Flux bootstrap: ").strip()
+-        if not token:
+-            raise InstallError("A GitHub token is required for Flux bootstrap")
+-
+-        owner = self.config.git.github_owner
+-        repository = self.config.git.github_repository
+-        if not owner or not repository:
+-            raise InstallError("git.github_owner and git.github_repository are required")
+-
+-        info("Bootstrapping Flux")
++        info("Bootstrapping Argo CD")
+         env = self.kubectl_env()
+-        env["GITHUB_TOKEN"] = token
+-        args = [
+-            "flux",
+-            "bootstrap",
+-            "github",
+-            f"--owner={owner}",
+-            f"--repository={repository}",
+-            f"--branch={self.config.git.infrastructure_branch}",
+-            "--path=clusters/production",
+-            "--personal",
++        commands = [
++            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/namespace.yaml")],
++            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/cmp-plugin.yaml")],
++            ["helm", "repo", "add", "argo", "https://argoproj.github.io/argo-helm", "--force-update"],
++            ["helm", "repo", "update"],
++            ["helm", "upgrade", "--install", "argocd", "argo/argo-cd", "--namespace", "argocd", "--create-namespace", "--values", str(self.repo_root / "argocd/values.yaml"), "--wait", "--timeout", "15m"],
++            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/project.yaml")],
++            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/root-application.yaml")],
+         ]
+-        if self.dry_run:
+-            info("[dry-run] " + shlex.join(args))
+-            return
+-        run(args, env=env, sensitive=True)
++        for command in commands:
++            if self.dry_run:
++                info("[dry-run] " + shlex.join(command))
++            else:
++                run(command, env=env)
+ 
+     def build_and_import_images(self) -> None:
+         if not self.config.deployment.build_application_images:
+@@ -616,43 +603,27 @@
+     def wait_for_cluster(self) -> None:
+         if self.dry_run:
+             return
+-        info("Waiting for Flux and workloads")
++        info("Waiting for Argo CD applications and workloads")
+         env = self.kubectl_env()
+         deadline = time.time() + self.config.deployment.wait_timeout_seconds
+         while time.time() < deadline:
+-            result = run(
+-                ["kubectl", "get", "kustomizations", "-A", "-o", "json"],
+-                env=env,
+-                check=False,
+-                capture=True,
+-            )
++            result = run(["kubectl", "get", "applications.argoproj.io", "-n", "argocd", "-o", "json"], env=env, check=False, capture=True)
+             if result.returncode == 0:
+                 try:
+-                    payload = json.loads(result.stdout)
+-                    items = payload.get("items", [])
+-                    if items:
+-                        all_ready = True
+-                        for item in items:
+-                            conditions = item.get("status", {}).get("conditions", [])
+-                            ready = any(
+-                                condition.get("type") == "Ready"
+-                                and condition.get("status") == "True"
+-                                for condition in conditions
+-                            )
+-                            all_ready = all_ready and ready
+-                        if all_ready:
+-                            success("All Flux Kustomizations are Ready")
+-                            break
++                    items = json.loads(result.stdout).get("items", [])
++                    children = [item for item in items if item.get("metadata", {}).get("name") != "casinoshiz-production"]
++                    if children and all(item.get("status", {}).get("sync", {}).get("status") == "Synced" and item.get("status", {}).get("health", {}).get("status") in {"Healthy", "Progressing"} for item in children):
++                        success("All Argo CD applications are Synced")
++                        break
+                 except json.JSONDecodeError:
+                     pass
+             time.sleep(10)
+         else:
+-            warn("Timed out waiting for all Flux Kustomizations")
+-
++            warn("Timed out waiting for Argo CD applications")
++        run(["kubectl", "get", "applications", "-n", "argocd"], env=env, check=False)
+         run(["kubectl", "get", "nodes", "-o", "wide"], env=env, check=False)
+         run(["kubectl", "get", "pods", "-A"], env=env, check=False)
+         run(["kubectl", "get", "pvc", "-A"], env=env, check=False)
+-        run(["flux", "get", "all", "-A"], env=env, check=False)
+ 
+     def run(self) -> None:
+         self.require_tools()
+@@ -672,7 +643,7 @@
+         self.fetch_kubeconfig()
+         self.install_sops_key()
+         self.build_and_import_images()
+-        self.bootstrap_flux()
++        self.bootstrap_argocd()
+         self.wait_for_cluster()
+ 
+         success("Installer finished")

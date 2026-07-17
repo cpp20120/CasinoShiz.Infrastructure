@@ -1,0 +1,48 @@
+global:
+  imageRegistry: k3d-casinoshiz-registry.localhost:5000
+  imagePullPolicy: Always
+  minioEndpoint: minio.data.svc.cluster.local:9000
+
+ingress:
+  enabled: true
+  className: traefik
+  clusterIssuer: ""
+
+monitoring:
+  enabled: true
+
+frontend:
+  host: app.casinoshiz.localhost
+  image:
+    repository: casinoshiz-frontend
+    tag: local
+
+backendImage:
+  repository: casinoshiz-backend
+  tag: local
+
+services:
+  identity:
+    image: { repository: casinoshiz-identity, tag: local }
+    autoscaling: false
+  wallet:
+    image: { repository: casinoshiz-wallet, tag: local }
+    autoscaling: false
+  telegram-bff:
+    image: { repository: casinoshiz-telegram-bff, tag: local }
+    host: tg.casinoshiz.localhost
+    autoscaling: false
+  discord-bff:
+    image: { repository: casinoshiz-discord-bff, tag: local }
+    autoscaling: false
+  admin-bff:
+    image: { repository: casinoshiz-admin-bff, tag: local }
+    host: admin.casinoshiz.localhost
+    autoscaling: false
+  rest-api:
+    image: { repository: casinoshiz-rest-api, tag: local }
+    host: api.casinoshiz.localhost
+    autoscaling: false
+
+autoscaling:
+  enabled: false
