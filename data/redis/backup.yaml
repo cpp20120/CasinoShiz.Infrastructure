@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: data
+spec:
+  schedule: "45 2 * * *"
+  timeZone: "Europe/Helsinki"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: redis:7-alpine
+              env:
+                - name: REDISCLI_AUTH
+                  valueFrom:
+                    secretKeyRef:
+                      name: data-secrets
+                      key: redis-password
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  host="redis.data.svc.cluster.local"
+                  before="$(redis-cli -h "$host" LASTSAVE)"
+                  redis-cli -h "$host" BGSAVE
+
+                  for attempt in $(seq 1 120); do
+                    after="$(redis-cli -h "$host" LASTSAVE)"
+                    if [ "$after" -gt "$before" ]; then
+                      break
+                    fi
+                    sleep 1
+                  done
+
+                  [ "${after:-0}" -gt "$before" ] || {
+                    echo "Redis BGSAVE did not complete in time" >&2
+                    exit 1
+                  }
+
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  target="/backup/redis/$ts"
+                  mkdir -p "$target"
+
+                  test -s /redis-data/dump.rdb
+                  cp /redis-data/dump.rdb "$target/dump.rdb"
+                  cp -a /redis-data/appendonlydir "$target/" 2>/dev/null || true
+
+                  (
+                    cd "$target"
+                    find . -type f ! -name SHA256SUMS -print0                       | sort -z                       | xargs -0 sha256sum > SHA256SUMS
+                  )
+
+                  find /backup/redis                     -mindepth 1                     -maxdepth 1                     -type d                     -mtime +13                     -exec rm -rf {} +
+              volumeMounts:
+                - name: redis-data
+                  mountPath: /redis-data
+                  readOnly: true
+                - name: backups
+                  mountPath: /backup
+          volumes:
+            - name: redis-data
+              persistentVolumeClaim:
+                claimName: data-redis-0
+            - name: backups
+              persistentVolumeClaim:
+                claimName: data-backups

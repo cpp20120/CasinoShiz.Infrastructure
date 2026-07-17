@@ -1,8 +1,8 @@
 creation_rules:
   - path_regex: '(^|/).*[.]secret[.]ya?ml$'
     encrypted_regex: '^(data|stringData)$'
-    age: age12rjygp23vmnu2tnl5hsf2qh2pqp4ym775vad3fp5qdrs2q9ldcxqqpgnqa
+    age: AGE_RECIPIENT
 
   - path_regex: '(^|/).*ghcr.*[.]ya?ml$'
     encrypted_regex: '^(data|stringData)$'
-    age: age12rjygp23vmnu2tnl5hsf2qh2pqp4ym775vad3fp5qdrs2q9ldcxqqpgnqa
+    age: AGE_RECIPIENT

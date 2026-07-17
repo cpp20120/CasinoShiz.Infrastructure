@@ -1,0 +1,7 @@
+# Append to the repository .gitignore:
+*.dec.yaml
+*.decrypted.yaml
+.env
+.env.*
+!.env.example
+.deploy/

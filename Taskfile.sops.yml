@@ -1,0 +1,38 @@
+version: '3'
+
+tasks:
+  sops:init:
+    desc: Create .sops.yaml from the local age identity
+    cmds:
+      - python scripts/infra.py sops init
+
+  sops:check:
+    desc: Verify tracked production Secrets are SOPS encrypted and decryptable
+    cmds:
+      - python scripts/infra.py sops check
+
+  sops:encrypt:
+    desc: Encrypt FILE in place, for example FILE=data/data.secret.yaml
+    requires:
+      vars:
+        - FILE
+    cmds:
+      - python scripts/infra.py sops encrypt "{{.FILE}}"
+
+  sops:ghcr:
+    desc: Create encrypted GHCR pull Secret from GHCR_USERNAME and GHCR_TOKEN
+    cmds:
+      - python scripts/infra.py sops ghcr-secret
+
+  sops:app:
+    desc: Create encrypted app Secret; set ENV_FILE
+    requires:
+      vars:
+        - ENV_FILE
+    cmds:
+      - python scripts/infra.py sops app-secret "{{.ENV_FILE}}"
+
+  validate:sops:
+    desc: SOPS validation entrypoint for inclusion in validate
+    cmds:
+      - python scripts/infra.py sops check

@@ -1,27 +1,143 @@
 # CasinoShiz.Infrastructure
 
-GitOps-инфраструктура для развёртывания CasinoShiz в Kubernetes.
+GitOps-инфраструктура для локального и production-развёртывания CasinoShiz в Kubernetes.
 
-Репозиторий содержит bootstrap хоста, k3s/k3d-кластеры, Flux, Helm chart приложения, stateful data services, observability, autoscaling, backup jobs, SOPS-ready secrets и эксплуатационные runbooks.
+Репозиторий содержит:
 
-## Что здесь есть
+* bootstrap single-node VPS;
+* локальный k3d-кластер;
+* k3s production cluster;
+* Flux CD;
+* Helm chart приложения;
+* stateful data services;
+* observability;
+* autoscaling;
+* NetworkPolicy;
+* backup и restore workflows;
+* SOPS-encrypted Kubernetes Secrets;
+* единый operational CLI;
+* эксплуатационные runbooks и проверки готовности.
+
+Текущая архитектура рассчитана на один VPS и текущий масштаб CasinoShiz. Она не является high-availability кластером, но покрывает полный lifecycle приложения: от установки k3s до backup, restore и диагностики.
+
+---
+
+## Архитектурные границы
+
+Инструменты разделены по ответственности:
+
+```text
+Taskfile
+  └── удобный публичный интерфейс команд
+
+Python CLI
+  └── orchestration локальных инструментов и Kubernetes operations
+
+Ansible
+  └── bootstrap и настройка VPS/k3s
+
+Flux CD
+  └── постоянная GitOps reconciliation внутри Kubernetes
+
+Helm
+  └── шаблонизация application workloads
+
+Kustomize
+  └── композиция platform, data и application manifests
+
+SOPS + age
+  └── encrypted Kubernetes Secrets в Git
+```
+
+Основная production-цепочка:
+
+```text
+GitHub Actions
+  ├── build/test application
+  └── push images в GHCR
+
+Git repository
+  └── desired Kubernetes state
+
+Ansible
+  └── устанавливает и настраивает k3s на VPS
+
+Flux
+  └── читает Git и применяет manifests
+
+k3s/containerd
+  └── получает application images из GHCR
+```
+
+---
+
+## Что уже реализовано
 
 ### Kubernetes и GitOps
 
 * k3s для production single-node VPS;
-* k3d для полного локального окружения;
+* k3d для локального Kubernetes-окружения;
 * Flux CD;
 * staged reconciliation:
 
   * platform;
   * data;
   * application;
-* Kustomize overlays для production и local;
 * Helm chart CasinoShiz;
+* Kustomize composition для production и local;
 * локальный Docker registry для k3d;
-* Taskfile для единых команд локально и в CI.
+* Taskfile для единых локальных и CI-команд;
+* SOPS decryption через Flux;
+* production preflight и post-deploy checks;
+* cluster status и diagnostics commands.
 
-### Application workloads
+### Host bootstrap
+
+Ansible отвечает за:
+
+* подключение к VPS по SSH;
+* установку системных пакетов;
+* настройку каталогов;
+* базовую настройку host firewall и sysctl;
+* установку k3s;
+* выбор ingress-профиля;
+* конфигурацию systemd/k3s;
+* подготовку хоста к Flux bootstrap.
+
+Ansible запускается локально и конфигурирует удалённый VPS.
+
+На VPS Ansible заранее устанавливать не требуется.
+
+```text
+локальная машина
+  └── ansible-playbook
+        └── SSH
+              └── VPS
+```
+
+### Operational CLI
+
+Repository-level shell scripts сведены в единый CLI:
+
+```bash
+python scripts/infra.py --help
+```
+
+Группы команд:
+
+```text
+local     локальный k3d cluster, registry и Flux bootstrap
+sops      age/SOPS и генерация Secret manifests
+cluster   preflight, status и post-deploy проверки
+backup    ручной запуск backup Jobs
+restore   restore и restore verification
+```
+
+Taskfile остаётся публичным facade и вызывает Python CLI внутри.
+
+---
+
+## Application workloads
 
 Helm chart умеет разворачивать:
 
@@ -53,9 +169,15 @@ Helm chart умеет разворачивать:
   * meta;
   * admin.
 
-Game services используют общий backend image с разным значением `Backend__Modules`.
+Game services используют общий backend image с различными значениями:
 
-### Data services
+```text
+Backend__Modules
+```
+
+---
+
+## Data services
 
 В namespace `data` разворачиваются:
 
@@ -70,9 +192,22 @@ PostgreSQL содержит отдельные базы:
 * `identity`;
 * `wallet`.
 
-Хранилища используют StatefulSet и `local-path` PVC.
+Stateful services используют StatefulSet и persistent storage:
 
-### Backups
+```text
+postgres-0
+redis-0
+clickhouse-0
+minio-0
+```
+
+Storage основан на `local-path` PVC.
+
+Это обеспечивает сохранение данных при перезапуске Pod, но не обеспечивает отказоустойчивость при потере VPS или диска.
+
+---
+
+## Backups
 
 Для stateful services настроены Kubernetes CronJob:
 
@@ -84,7 +219,11 @@ PostgreSQL содержит отдельные базы:
 | 04:15 | MinIO mirror             |
 | 05:30 | optional off-site sync   |
 
-Все локальные backup сохраняются в отдельный PVC `data-backups`.
+Все локальные backup сохраняются в отдельный PVC:
+
+```text
+data-backups
+```
 
 Retention:
 
@@ -93,11 +232,168 @@ Retention:
 * ClickHouse — 14 дней;
 * MinIO — 7 дней.
 
-Также предусмотрена optional синхронизация backup во внешний S3-compatible storage через `rclone`.
+Также предусмотрена optional синхронизация во внешний S3-compatible storage через `rclone`.
 
-> Локальный backup на той же VPS защищает от случайного удаления, неудачной миграции и логической порчи, но не защищает от потери VPS или диска.
+> Backup на той же VPS защищает от случайного удаления, неудачной миграции и логической порчи, но не защищает от полной потери VPS или её диска.
 
-### Observability
+### Ручной запуск backup
+
+```bash
+go-task backup:manual
+```
+
+Эквивалентная прямая команда:
+
+```bash
+python scripts/infra.py backup run
+```
+
+Проверка:
+
+```bash
+kubectl get cronjobs,jobs -n data
+```
+
+Logs конкретного Job:
+
+```bash
+kubectl logs -n data job/<job-name>
+```
+
+---
+
+## Restore
+
+Для backup workflows добавлены исполняемые restore operations.
+
+Restore по умолчанию безопасен:
+
+* PostgreSQL восстанавливается в новую database;
+* ClickHouse восстанавливается в новую database;
+* Redis проверяется в изолированном временном экземпляре;
+* MinIO восстанавливается в новый bucket.
+
+Production data не перезаписывается без явного destructive режима или явно заданного target.
+
+### PostgreSQL
+
+Восстановить latest backup базы `backend`:
+
+```bash
+python scripts/infra.py restore postgres \
+  --database backend
+```
+
+Выбрать backup и target:
+
+```bash
+python scripts/infra.py restore postgres \
+  --backup 20260717T021500Z \
+  --database backend \
+  --target backend_restore_test
+```
+
+Restore выполняет:
+
+1. проверку backup-файла;
+2. проверку `SHA256SUMS`;
+3. создание новой базы;
+4. `pg_restore --exit-on-error`;
+5. проверку наличия пользовательских таблиц.
+
+### ClickHouse
+
+```bash
+python scripts/infra.py restore clickhouse \
+  --source-db cazinoshiz
+```
+
+Явный backup и target:
+
+```bash
+python scripts/infra.py restore clickhouse \
+  --backup 20260717T033000Z \
+  --source-db cazinoshiz \
+  --target-db cazinoshiz_restore_test
+```
+
+### Redis
+
+Безопасная проверка backup:
+
+```bash
+python scripts/infra.py restore redis \
+  --mode verify
+```
+
+Проверка выполняет:
+
+1. копирование `dump.rdb` в isolated Job;
+2. запуск `redis-check-rdb`;
+3. запуск временного Redis только внутри Job;
+4. проверку `PING`;
+5. проверку `DBSIZE`.
+
+Destructive replacement production Redis:
+
+```bash
+python scripts/infra.py restore redis \
+  --mode replace \
+  --backup 20260717T024500Z \
+  --confirm REPLACE_REDIS
+```
+
+При replacement Redis StatefulSet сначала масштабируется в `0`, после чего содержимое PVC заменяется.
+
+### MinIO
+
+Restore требует имя исходного bucket:
+
+```bash
+python scripts/infra.py restore minio \
+  --bucket casino-assets
+```
+
+По умолчанию будет создан отдельный bucket:
+
+```text
+casino-assets-restore-<timestamp>
+```
+
+Явный target:
+
+```bash
+python scripts/infra.py restore minio \
+  --bucket casino-assets \
+  --target-bucket casino-assets-restore-test
+```
+
+### Restore smoke test
+
+```bash
+go-task restore:smoke
+```
+
+Или:
+
+```bash
+python scripts/infra.py restore smoke
+```
+
+С явными значениями:
+
+```bash
+POSTGRES_DATABASE=backend \
+CLICKHOUSE_DATABASE=cazinoshiz \
+MINIO_BUCKET=casino-assets \
+python scripts/infra.py restore smoke
+```
+
+PostgreSQL и ClickHouse restore-базы намеренно сохраняются после smoke test для ручной проверки.
+
+---
+
+## Observability
 
 В репозитории настроены:
 
@@ -112,7 +408,7 @@ Retention:
 Applications экспортируют:
 
 ```text
-metrics -> VictoriaMetrics
+metrics -> VictoriaMetrics -> Grafana
 traces  -> OpenTelemetry Collector -> Tempo
 ```
 
@@ -122,7 +418,7 @@ traces  -> OpenTelemetry Collector -> Tempo
 * недоступных Deployment;
 * недоступных StatefulSet;
 * частых рестартов контейнеров;
-* незапущенных pods;
+* незапущенных Pods;
 * заполнения PVC;
 * PVC в `Pending` или `Lost`;
 * `DiskPressure`;
@@ -132,7 +428,9 @@ traces  -> OpenTelemetry Collector -> Tempo
 * suspended backup CronJobs;
 * пропущенных backup schedules.
 
-### Autoscaling
+---
+
+## Autoscaling
 
 Настроен CPU-based HPA для:
 
@@ -152,23 +450,39 @@ scale-down stabilization: 300 seconds
 
 Также установлен KEDA operator.
 
-`ScaledObject` намеренно не добавлен, пока отсутствует реальный backlog metric, например:
+`ScaledObject` намеренно не добавлен, пока отсутствует реальная backlog metric:
 
 * Redis Streams pending count;
 * queue length;
 * effect execution backlog;
 * durable job count.
 
-### Networking и TLS
+---
 
-Production environment использует:
+## Networking и TLS
 
-* Traefik из k3s;
+Production может использовать один из двух ingress-профилей:
+
+* Traefik, встроенный в k3s;
+* минимальный nginx profile с отключением встроенного Traefik.
+
+Также используются:
+
 * cert-manager;
 * Let's Encrypt;
 * Kubernetes Ingress;
 * baseline NetworkPolicy;
 * Pod Security namespace labels.
+
+Для NetworkPolicy на текущем этапе используется стандартный k3s networking stack:
+
+```text
+Flannel
++
+встроенный kube-router NetworkPolicy controller
+```
+
+Cilium или Calico для текущего single-node масштаба не требуются.
 
 Публично предполагается открывать только:
 
@@ -178,27 +492,138 @@ Production environment использует:
 * REST API;
 * Grafana.
 
-PostgreSQL, Redis, ClickHouse, MinIO, Tempo и OpenTelemetry Collector не должны быть доступны из интернета.
+Не должны быть доступны из интернета:
 
-### Secrets
+* PostgreSQL;
+* Redis;
+* ClickHouse;
+* MinIO;
+* Tempo;
+* OpenTelemetry Collector;
+* internal application services.
 
-Secrets предназначены для хранения в Git через:
+---
+
+## Secrets
+
+Secrets хранятся в Git только в зашифрованном виде:
 
 * SOPS;
 * age;
 * Flux SOPS decryption.
 
-Приватный age key хранится вне Git.
+Приватный age key хранится вне Git:
 
-В репозитории могут находиться только зашифрованные Secret manifests.
+```text
+~/.config/sops/age/keys.txt
+```
 
-## Архитектура
+В Git могут находиться только encrypted Secret manifests.
+
+### Инициализация SOPS
+
+```bash
+python scripts/infra.py sops init
+```
+
+Команда:
+
+1. создаёт age identity, если её ещё нет;
+2. получает public age recipient;
+3. создаёт `.sops.yaml`;
+4. оставляет private key только на локальной машине.
+
+### Создание application Secret
+
+```bash
+python scripts/infra.py sops app-secret \
+  ../CasinoShiz/.env.production
+```
+
+Plaintext env используется только как input.
+
+Результат сразу шифруется и сохраняется как Kubernetes Secret manifest.
+
+### Создание GHCR pull Secret
+
+```bash
+export GHCR_USERNAME=cpp20120
+
+read -rsp 'GHCR token: ' GHCR_TOKEN
+export GHCR_TOKEN
+
+python scripts/infra.py sops ghcr-secret
+
+unset GHCR_TOKEN
+```
+
+### Шифрование существующего Secret
+
+```bash
+python scripts/infra.py sops encrypt \
+  data/data.secret.yaml
+```
+
+Можно передать несколько файлов:
+
+```bash
+python scripts/infra.py sops encrypt \
+  data/data.secret.yaml \
+  clusters/production/casinoshiz/casinoshiz.secret.yaml \
+  clusters/production/casinoshiz/ghcr.secret.yaml
+```
+
+### Проверка SOPS
+
+```bash
+go-task sops:check
+```
+
+Или:
+
+```bash
+python scripts/infra.py sops check
+```
+
+Проверяется, что tracked production `*.secret.yaml`:
+
+* имеет `kind: Secret`;
+* содержит SOPS metadata;
+* содержит `ENC[AES256_GCM,...]`;
+* расшифровывается текущим age identity;
+* имеет корректный MAC.
+
+Plaintext при проверке не выводится.
+
+### Flux decryption
+
+В Flux Kustomization используется:
+
+```yaml
+spec:
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+```
+
+В namespace `flux-system` должен существовать Secret:
+
+```text
+sops-age
+```
+
+с private age identity.
+
+---
+
+## Архитектура сервисов
 
 ```text
 Internet
    |
    v
-Traefik
+Traefik или nginx
    |
    +--> frontend
    +--> telegram-bff
@@ -216,10 +641,24 @@ Traefik
 
 Applications
    |
-   +--> /metrics --> VictoriaMetrics --> Grafana
+   +--> /metrics
+   |      |
+   |      v
+   |   VictoriaMetrics
+   |      |
+   |      v
+   |    Grafana
    |
-   +--> OTLP --> OpenTelemetry Collector --> Tempo
+   +--> OTLP
+          |
+          v
+   OpenTelemetry Collector
+          |
+          v
+        Tempo
 ```
+
+---
 
 ## Структура репозитория
 
@@ -261,22 +700,27 @@ Applications
 │   ├── tracing/
 │   └── network-policies/
 │
+├── deploy/
+│   ├── installer.example.toml
+│   └── installer.local.toml
+│
+├── profiles/
+│   ├── traefik/
+│   └── nginx/
+│
 ├── scripts/
-│   ├── local-cluster-create.sh
-│   ├── local-cluster-delete.sh
-│   ├── local-flux-bootstrap.sh
-│   ├── local-image-push.sh
-│   ├── manual-backup.sh
-│   ├── preflight.sh
-│   ├── post-deploy-check.sh
-│   └── cluster-status.sh
+│   ├── infra.py
+│   └── install.py
 │
 ├── docs/
 │   ├── LOCAL_FULL_SETUP.md
 │   ├── OPERATIONS.md
+│   ├── OPERATIONS_CLI.md
 │   ├── PRODUCTION_CHECKLIST.md
 │   ├── RUNBOOKS.md
 │   ├── DISASTER_RECOVERY.md
+│   ├── RESTORE.md
+│   ├── SOPS.md
 │   └── data-backups.md
 │
 ├── .github/
@@ -292,10 +736,13 @@ Applications
 └── CONTRIBUTING.md
 ```
 
+---
+
 ## Требования
 
 Для локальной работы необходимы:
 
+* Python 3;
 * Docker;
 * kubectl;
 * Helm;
@@ -314,6 +761,7 @@ Applications
 
 ```bash
 sudo pacman -S \
+  python \
   docker \
   docker-compose \
   kubectl \
@@ -330,9 +778,11 @@ sudo pacman -S \
 
 `k3d` и `flux` устанавливаются отдельно через официальные installers или подходящие Arch/AUR packages.
 
+---
+
 ## Taskfile
 
-Показать доступные команды:
+Показать команды:
 
 ```bash
 go-task --list
@@ -348,29 +798,49 @@ go-task render:chart
 go-task render:cluster
 go-task ansible:check
 go-task secrets:check
-go-task placeholders
+go-task sops:init
+go-task sops:check
 go-task validate
 go-task release:check
 go-task preflight
 go-task post-deploy
 go-task backup:manual
+go-task restore:postgres
+go-task restore:clickhouse
+go-task restore:redis:verify
+go-task restore:minio
+go-task restore:smoke
 go-task status
 go-task clean
 ```
 
-### Проверка manifests
+Taskfile является удобным facade.
+
+Сложная orchestration-логика находится в:
+
+```text
+scripts/infra.py
+```
+
+---
+
+## Validation
+
+Основная проверка:
 
 ```bash
 go-task clean
 go-task validate
 ```
 
-Команда выполняет:
+Validation включает:
 
 1. Helm lint;
 2. Helm render;
 3. Kustomize render;
-4. basic plaintext-secret validation.
+4. проверку plaintext secrets;
+5. SOPS validation;
+6. проверку итоговых rendered manifests.
 
 Rendered manifests сохраняются в:
 
@@ -379,80 +849,56 @@ Rendered manifests сохраняются в:
 .task/rendered/production.yaml
 ```
 
-## Полное локальное развёртывание
+### Helm templates и yamllint
 
-Полная пошаговая инструкция находится в:
+Файлы:
 
 ```text
-docs/LOCAL_FULL_SETUP.md
+charts/*/templates/*.yaml
 ```
 
-```sh
-unzip -o CasinoShiz.Infrastructure.profile-installer.zip -d .
-chmod +x scripts/install.py
+не являются обычным YAML до выполнения Helm render.
 
-python -m py_compile scripts/install.py
-go-task clean
-go-task validate
-````
+Они содержат Go template expressions:
 
-Общая последовательность:
-
-### 1. Создать age key
-
-```bash
-mkdir -p ~/.config/sops/age
-chmod 700 ~/.config/sops/age
-
-age-keygen -o ~/.config/sops/age/keys.txt
-chmod 600 ~/.config/sops/age/keys.txt
+```text
+{{ .Values.* }}
+{{- if ... }}
+{{ include ... }}
 ```
 
-Получить public recipient:
+Поэтому сырые Helm templates нельзя проверять обычным `yamllint`.
 
-```bash
-AGE_RECIPIENT="$(
-  age-keygen -y ~/.config/sops/age/keys.txt
-)"
+Правильная последовательность:
 
-echo "$AGE_RECIPIENT"
+```text
+helm lint
+→ helm template
+→ yamllint rendered YAML
+→ kubeconform rendered YAML
 ```
 
-Подставить его в `.sops.yaml`.
+Сырые `charts/**/templates/**` должны быть исключены из прямого `yamllint`.
 
-### 2. Создать и зашифровать local secrets
+Пример:
 
 ```bash
-cp \
-  clusters/local/stages/data/data.secret.yaml.example \
-  clusters/local/stages/data/data.secret.yaml
+helm template casinoshiz charts/casinoshiz \
+  --namespace casinoshiz \
+  -f charts/casinoshiz/values-production.yaml \
+  > .task/rendered/casinoshiz.yaml
 
-cp \
-  clusters/local/stages/app/casinoshiz.secret.yaml.example \
-  clusters/local/stages/app/casinoshiz.secret.yaml
+yamllint .task/rendered/casinoshiz.yaml
 ```
 
-После заполнения:
+---
+
+## Локальное окружение
+
+Создать local k3d cluster:
 
 ```bash
-sops --encrypt --in-place \
-  clusters/local/stages/data/data.secret.yaml
-
-sops --encrypt --in-place \
-  clusters/local/stages/app/casinoshiz.secret.yaml
-```
-
-Проверить:
-
-```bash
-grep -n 'ENC\[' clusters/local/stages/data/data.secret.yaml
-grep -n 'ENC\[' clusters/local/stages/app/casinoshiz.secret.yaml
-```
-
-### 3. Создать k3d cluster и registry
-
-```bash
-./scripts/local-cluster-create.sh
+python scripts/infra.py local create
 ```
 
 Создаются:
@@ -468,7 +914,7 @@ cluster registry:
 k3d-casinoshiz-registry.localhost:5005
 ```
 
-### 4. Собрать application images
+### Local images
 
 В application repository:
 
@@ -477,15 +923,15 @@ docker compose build
 docker image ls
 ```
 
-Загрузить images в local registry:
+Загрузить image в local registry:
 
 ```bash
-./scripts/local-image-push.sh \
+python scripts/infra.py local image-push \
   <source-image:tag> \
   casinoshiz-backend
 ```
 
-Необходимые repositories:
+Основные repositories:
 
 ```text
 casinoshiz-backend
@@ -503,10 +949,10 @@ casinoshiz-frontend
 curl -fsS http://localhost:5005/v2/_catalog | jq
 ```
 
-### 5. Установить Flux и передать age key
+### Local Flux bootstrap
 
 ```bash
-./scripts/local-flux-bootstrap.sh
+python scripts/infra.py local flux-bootstrap
 ```
 
 Проверить:
@@ -520,7 +966,7 @@ kubectl get pods -A
 kubectl get pvc -A
 ```
 
-### 6. Открыть локальные сервисы
+### Port forwarding
 
 Frontend:
 
@@ -561,126 +1007,204 @@ kubectl port-forward \
   9001:9001
 ```
 
+### Удаление local cluster
+
+Удалить cluster, сохранив registry:
+
+```bash
+python scripts/infra.py local delete
+```
+
+Удалить cluster и registry:
+
+```bash
+DELETE_LOCAL_REGISTRY=true \
+python scripts/infra.py local delete
+```
+
+Local PVC и backup data внутри k3d cluster будут удалены вместе с cluster.
+
+---
+
 ## Production deployment
 
-Production предполагает single-node VPS с k3s.
+Production рассчитан на single-node VPS с k3s.
 
-Порядок:
+Installer получает:
 
-1. заполнить Ansible inventory;
-2. заменить production `CHANGE_ME`;
-3. настроить DNS;
-4. создать production SOPS secrets;
-5. указать immutable image tags или digests;
-6. запустить Ansible bootstrap;
-7. получить kubeconfig;
-8. выполнить Flux bootstrap;
-9. дождаться reconciliation;
-10. проверить certificates;
-11. проверить StatefulSet и PVC;
-12. выполнить manual backups;
-13. выполнить restore test;
-14. проверить metrics и traces.
+* SSH target `user@IP`;
+* SSH key;
+* ingress profile;
+* repository URLs;
+* domains;
+* age key path;
+* GitHub token для Flux bootstrap;
+* image mapping для optional remote/local build mode.
 
-Ansible bootstrap:
+Пример запуска:
 
 ```bash
-cd ansible
-ansible-playbook playbooks/site.yml
+export GITHUB_TOKEN='github_pat_...'
+
+python scripts/install.py \
+  --config deploy/installer.local.toml
 ```
 
-Flux bootstrap:
+Installer:
 
-```bash
-flux bootstrap github \
-  --owner=cpp20120 \
-  --repository=CasinoShiz.Infrastructure \
-  --branch=main \
-  --path=clusters/production \
-  --personal
+1. читает TOML configuration;
+2. проверяет SSH;
+3. выбирает ingress profile;
+4. генерирует Ansible inventory и variables;
+5. запускает Ansible;
+6. устанавливает k3s;
+7. получает kubeconfig;
+8. создаёт `flux-system/sops-age`;
+9. bootstrap-ит Flux;
+10. ждёт reconciliation;
+11. выполняет readiness checks.
+
+### Production flow
+
+```text
+1. Создать age key
+2. Создать и зашифровать Secrets
+3. Указать images и domains
+4. Запустить validate
+5. Commit encrypted desired state
+6. Push в Git
+7. Запустить installer
+8. Проверить Flux
+9. Проверить Pods и PVC
+10. Запустить backup
+11. Запустить restore smoke test
+12. Проверить reboot/failure recovery
 ```
 
-Перед production deployment:
+### Полный набор команд
+
+#### 1. Инициализация age/SOPS
 
 ```bash
+python scripts/infra.py sops init
+```
+
+#### 2. Application Secret
+
+```bash
+python scripts/infra.py sops app-secret \
+  ../CasinoShiz/.env.production
+```
+
+#### 3. GHCR Secret
+
+```bash
+export GHCR_USERNAME=cpp20120
+export GHCR_TOKEN='...'
+
+python scripts/infra.py sops ghcr-secret
+
+unset GHCR_TOKEN
+```
+
+#### 4. Production values
+
+```bash
+$EDITOR charts/casinoshiz/values-production.yaml
+$EDITOR deploy/installer.local.toml
+```
+
+#### 5. Проверка
+
+```bash
+go-task clean
+go-task validate
 go-task release:check
-go-task preflight
 ```
 
-После reconciliation:
+#### 6. Git commit
 
 ```bash
-go-task post-deploy
-go-task backup:manual
-go-task status
-```
-
-## Работа с SOPS
-
-Открыть encrypted secret в editor:
-
-```bash
-sops clusters/local/stages/app/casinoshiz.secret.yaml
-```
-
-Расшифровать только в stdout:
-
-```bash
-sops --decrypt \
-  clusters/local/stages/app/casinoshiz.secret.yaml
-```
-
-Изменения после редактирования:
-
-```bash
-git add clusters/local/stages/app/casinoshiz.secret.yaml
-git commit -m "update application secrets"
+git add .
+git commit -m "configure production deployment"
 git push
 ```
 
-Затем:
+#### 7. Installer
 
 ```bash
-flux reconcile source git casinoshiz-infrastructure \
-  -n flux-system \
-  --with-source
+export GITHUB_TOKEN='...'
+
+python scripts/install.py \
+  --config deploy/installer.local.toml
 ```
 
-Приватный age key:
+#### 8. Kubeconfig
 
-```text
-~/.config/sops/age/keys.txt
+```bash
+export KUBECONFIG="$PWD/.deploy/kubeconfig"
 ```
 
-Он не должен попадать в Git.
+#### 9. Проверка кластера
 
-## Backup operations
+```bash
+flux get all -A
+kubectl get pods -A
+kubectl get pvc -A
+kubectl get events -A --sort-by=.lastTimestamp
+```
 
-Запустить все backup вручную:
+#### 10. Backup и restore
 
 ```bash
 go-task backup:manual
+go-task restore:smoke
 ```
 
-Или:
+---
 
-```bash
-./scripts/manual-backup.sh
+## Optional application image build
+
+Имена images нельзя надёжно вывести автоматически из инфраструктурного репозитория, поэтому optional build/import mode использует явную карту:
+
+```toml
+[deployment]
+build_application_images = true
+
+[images]
+backend = {
+  source = "compose-backend:latest",
+  target = "casinoshiz-backend:local"
+}
+
+identity = {
+  source = "compose-identity:latest",
+  target = "casinoshiz-identity:local"
+}
 ```
 
-Проверить:
+Для каждого image installer выполняет:
 
-```bash
-kubectl get cronjobs,jobs -n data
+```text
+docker compose build
+docker tag
+docker save
+sudo k3s ctr images import
 ```
 
-Logs:
+Helm values должны ссылаться на тот же target.
 
-```bash
-kubectl logs \
-  -n data \
-  job/<job-name>
+Для обычного production режима предпочтительнее GHCR:
+
+```text
+GitHub Actions
+→ GHCR
+→ k3s/containerd pull
 ```
+
+Application repository на VPS при этом не требуется.
+
+---
 
 ## Status и диагностика
 
@@ -688,6 +1212,12 @@ kubectl logs \
 
 ```bash
 go-task status
+```
+
+Или:
+
+```bash
+python scripts/infra.py cluster status
 ```
 
 Flux:
@@ -704,7 +1234,7 @@ kubectl get pods -A
 kubectl get events -A --sort-by=.lastTimestamp
 ```
 
-Проблемный pod:
+Проблемный Pod:
 
 ```bash
 kubectl describe pod <pod> -n <namespace>
@@ -727,22 +1257,55 @@ kubectl get challenges -A
 kubectl get orders -A
 ```
 
-## Удаление локального окружения
-
-Удалить cluster, сохранив registry:
+Resources:
 
 ```bash
-./scripts/local-cluster-delete.sh
+kubectl top nodes
+kubectl top pods -A --sort-by=memory
 ```
 
-Удалить cluster и registry:
+---
+
+## Failure tests
+
+Перед признанием production deployment готовым необходимо проверить восстановление после отказов.
+
+Удаление Pod:
 
 ```bash
-DELETE_LOCAL_REGISTRY=true \
-  ./scripts/local-cluster-delete.sh
+kubectl delete pod -n data postgres-0
+kubectl delete pod -n data redis-0
+kubectl delete pod -n data clickhouse-0
+kubectl delete pod -n data minio-0
 ```
 
-Все local-path PVC и локальные backup внутри кластера будут удалены вместе с cluster.
+После пересоздания необходимо проверить сохранность данных.
+
+Проверка reboot:
+
+```bash
+sudo reboot
+```
+
+После загрузки:
+
+```bash
+kubectl get pods -A
+flux get all -A
+```
+
+Проверка NetworkPolicy:
+
+```text
+frontend → PostgreSQL        denied
+backend → PostgreSQL         allowed
+backend → Redis              allowed
+random Pod → ClickHouse      denied
+workloads → kube-dns         allowed
+ingress → public services    allowed
+```
+
+---
 
 ## Документация
 
@@ -750,12 +1313,17 @@ DELETE_LOCAL_REGISTRY=true \
 | ------------------------------ | -------------------------------- |
 | `docs/LOCAL_FULL_SETUP.md`     | Полное локальное развёртывание   |
 | `docs/OPERATIONS.md`           | Архитектура и эксплуатация       |
+| `docs/OPERATIONS_CLI.md`       | Единый Python CLI                |
 | `docs/PRODUCTION_CHECKLIST.md` | Checklist перед production       |
 | `docs/RUNBOOKS.md`             | Диагностика типовых проблем      |
 | `docs/DISASTER_RECOVERY.md`    | Восстановление после аварии      |
-| `docs/data-backups.md`         | Backup и restore                 |
+| `docs/RESTORE.md`              | Restore operations               |
+| `docs/SOPS.md`                 | SOPS и age                       |
+| `docs/data-backups.md`         | Backup storage и retention       |
 | `SECURITY.md`                  | Security policy                  |
 | `CONTRIBUTING.md`              | Правила изменения инфраструктуры |
+
+---
 
 ## Ограничения
 
@@ -766,6 +1334,8 @@ DELETE_LOCAL_REGISTRY=true \
 * один local disk failure domain;
 * stateful services без репликации;
 * local-path storage;
+* standalone MinIO;
+* single-node ClickHouse;
 * monolithic Tempo;
 * single-node VictoriaMetrics.
 
@@ -774,105 +1344,46 @@ DELETE_LOCAL_REGISTRY=true \
 При росте нагрузки можно отдельно перейти на:
 
 * multi-node Kubernetes;
-* external managed PostgreSQL;
+* внешний или managed PostgreSQL;
 * replicated ClickHouse;
-* external S3;
+* внешний S3;
 * distributed VictoriaMetrics;
 * distributed Tempo;
 * отдельный backup host;
-* KEDA scaling по реальной очереди.
+* OpenTofu для создания VPS, firewall и DNS;
+* KEDA scaling по реальной очереди;
+* отдельные failure domains.
+
+OpenTofu не требуется для управления текущим Kubernetes desired state.
+
+Внутри кластера основным владельцем ресурсов остаётся Flux.
+
+---
 
 ## Готовность к production
 
-Инфраструктура готова к первому production deployment, когда:
+Инфраструктура готова к первому production deployment, когда выполнены все условия:
 
 * `go-task validate` проходит;
-* `go-task placeholders` не показывает production placeholders;
+* `go-task release:check` проходит;
+* production placeholders отсутствуют;
 * GitHub Actions зелёный;
-* SOPS secrets зашифрованы;
+* SOPS Secrets зашифрованы;
 * age private key сохранён вне Git;
+* Flux `sops-age` Secret создан;
 * application images опубликованы;
+* GHCR pull Secret работает;
 * DNS настроен;
 * TLS certificates выпущены;
-* Flux resources находятся в Ready;
-* все PVC находятся в Bound;
+* Flux resources находятся в `Ready`;
+* все Pods находятся в ожидаемом состоянии;
+* все PVC находятся в `Bound`;
 * manual backups проходят;
-* PostgreSQL и ClickHouse restore протестированы;
+* PostgreSQL restore протестирован;
+* ClickHouse restore протестирован;
+* Redis backup verification проходит;
+* MinIO restore протестирован;
+* NetworkPolicy фактически проверены;
+* Pod recreation не приводит к потере данных;
+* VPS reboot не ломает reconciliation;
 * Alertmanager доставляет test alert.
-
-
-
-Images
-
-Имена images нельзя надёжно вывести из инфраструктурного репозитория, поэтому для remote build используется явная карта:
-
-[deployment]
-build_application_images = true
-
-[images]
-backend = {
-  source = "compose-backend:latest",
-  target = "casinoshiz-backend:local"
-}
-
-identity = {
-  source = "compose-identity:latest",
-  target = "casinoshiz-identity:local"
-}
-
-Для каждого image installer делает:
-
-docker compose build
-docker tag
-docker save
-sudo k3s ctr images import
-
-Helm values должны ссылаться на тот же target.
-Installer нужно передать:
-SSH user@IP
-SSH key
-ingress profile
-repo URLs
-domains
-age key path
-GitHub token для Flux bootstrap т.е. export GITHUB_TOKEN='github_pat_...'
-
-
-
-т.е. полный набор шагов
-
-# 1. Создал age key
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# 2. Заполнил и зашифровал secrets
-sops --encrypt --in-place data/data.secret.yaml
-sops --encrypt --in-place \
-  clusters/production/casinoshiz/casinoshiz.secret.yaml
-sops --encrypt --in-place \
-  clusters/production/casinoshiz/ghcr.secret.yaml
-
-# 3. Указал images/domains/profile
-$EDITOR charts/casinoshiz/values-production.yaml
-$EDITOR deploy/installer.local.toml
-
-# 4. Проверил
-go-task clean
-go-task validate
-
-# 5. Отправил encrypted state в Git
-git add .
-git commit -m "configure production deployment"
-git push
-
-# 6. Запустил installer
-export GITHUB_TOKEN='...'
-
-python scripts/install.py \
-  --config deploy/installer.local.toml
-
-# 7. Проверил
-export KUBECONFIG="$PWD/.deploy/kubeconfig"
-
-flux get all -A
-kubectl get pods -A
-kubectl get pvc -A

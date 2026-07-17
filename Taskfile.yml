@@ -82,18 +82,11 @@ tasks:
     cmds:
       - |
         matches="$(
-          git grep -nE 'Password=[^$<{]|postgres-superuser-password: [^C]|redis-password: [^C]|minio-root-password: [^C]' \
-            -- \
-            ':!Taskfile.yml' \
-            ':!.github/workflows/**' \
-            ':!*.example' \
-            ':!docs/**' \
-            ':!charts/casinoshiz/templates/secret-example.yaml' \
-          || true
+          git grep -nE 'Password=[^$<{]|postgres-superuser-password: [^C]|redis-password: [^C]|minio-root-password: [^C]'             --             ':!Taskfile.yml'             ':!.github/workflows/**'             ':!*.example'             ':!docs/**'             ':!charts/casinoshiz/templates/secret-example.yaml'           || true
         )"
 
         if [ -n "$matches" ]; then
-          printf '%s\n' "$matches"
+          printf '%s\\n' "$matches"
           echo "Potential plaintext secret found."
           exit 1
         fi
@@ -109,7 +102,7 @@ tasks:
       - |
         matches="$(git grep -n CHANGE_ME || true)"
         if [ -n "$matches" ]; then
-          printf '%s\n' "$matches"
+          printf '%s\\n' "$matches"
           echo "Unresolved CHANGE_ME values remain."
           exit 1
         fi
@@ -122,6 +115,12 @@ tasks:
       - render:cluster
     cmds:
       - task: secrets:check
+      - >-
+        if [ -f .sops.yaml ]; then
+          python scripts/infra.py sops check;
+        else
+          echo '.sops.yaml is not initialized; run go-task sops:init';
+        fi
 
   release:check:
     desc: Validate a repository intended for production deployment
@@ -133,22 +132,82 @@ tasks:
   preflight:
     desc: Run production preflight against the configured cluster
     cmds:
-      - ./scripts/preflight.sh
+      - python scripts/infra.py cluster preflight
 
   post-deploy:
     desc: Verify a reconciled production cluster
     cmds:
-      - ./scripts/post-deploy-check.sh
+      - python scripts/infra.py cluster post-deploy
 
   backup:manual:
     desc: Run all backup CronJobs immediately and wait for completion
     cmds:
-      - ./scripts/manual-backup.sh
+      - python scripts/infra.py backup run
+
+  restore:postgres:
+    desc: Restore PostgreSQL into a separate database
+    cmds:
+      - python scripts/infra.py restore postgres
+
+  restore:clickhouse:
+    desc: Restore ClickHouse into a separate database
+    cmds:
+      - python scripts/infra.py restore clickhouse
+
+  restore:redis:verify:
+    desc: Verify the latest Redis backup in an isolated instance
+    cmds:
+      - python scripts/infra.py restore redis --mode verify
+
+  restore:minio:
+    desc: Restore a MinIO bucket; set MINIO_BUCKET
+    preconditions:
+      - sh: test -n "${MINIO_BUCKET:-}"
+        msg: Set MINIO_BUCKET to the source bucket name
+    cmds:
+      - python scripts/infra.py restore minio --bucket "$MINIO_BUCKET"
+
+  restore:smoke:
+    desc: Run safe restore smoke tests; optionally set MINIO_BUCKET
+    cmds:
+      - python scripts/infra.py restore smoke
+
+
+  sops:init:
+    desc: Initialize age and .sops.yaml
+    cmds:
+      - python scripts/infra.py sops init
+
+  sops:check:
+    desc: Validate SOPS-encrypted Secret manifests
+    cmds:
+      - python scripts/infra.py sops check
+
+  sops:encrypt:
+    desc: Encrypt FILE in place
+    requires:
+      vars:
+        - FILE
+    cmds:
+      - python scripts/infra.py sops encrypt "{{.FILE}}"
+
+  sops:app:
+    desc: Create encrypted app Secret from ENV_FILE
+    requires:
+      vars:
+        - ENV_FILE
+    cmds:
+      - python scripts/infra.py sops app-secret "{{.ENV_FILE}}"
+
+  sops:ghcr:
+    desc: Create encrypted GHCR pull Secret
+    cmds:
+      - python scripts/infra.py sops ghcr-secret
 
   status:
     desc: Show production cluster status
     cmds:
-      - ./scripts/cluster-status.sh
+      - python scripts/infra.py cluster status
 
   ci:
     desc: CI entrypoint
