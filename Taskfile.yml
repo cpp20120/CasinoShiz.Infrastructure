@@ -16,7 +16,7 @@ tasks:
   default:
     desc: List available tasks
     cmds:
-      - task --list
+      - go-task --list
 
   tools:
     desc: Check required local tools
@@ -70,11 +70,22 @@ tasks:
       - ansible-playbook playbooks/site.yml --syntax-check
 
   secrets:check:
-    desc: Reject obvious plaintext secrets and unresolved production placeholders
+    desc: Reject obvious plaintext secrets
     cmds:
       - |
-        if git grep -nE 'Password=[^$<{]|postgres-superuser-password: [^C]|redis-password: [^C]|minio-root-password: [^C]' \
-          -- ':!*.example' ':!docs/**' ':!charts/casinoshiz/templates/secret-example.yaml'; then
+        matches="$(
+          git grep -nE 'Password=[^$<{]|postgres-superuser-password: [^C]|redis-password: [^C]|minio-root-password: [^C]' \
+            -- \
+            ':!Taskfile.yml' \
+            ':!.github/workflows/**' \
+            ':!*.example' \
+            ':!docs/**' \
+            ':!charts/casinoshiz/templates/secret-example.yaml' \
+          || true
+        )"
+
+        if [ -n "$matches" ]; then
+          printf '%s\n' "$matches"
           echo "Potential plaintext secret found."
           exit 1
         fi

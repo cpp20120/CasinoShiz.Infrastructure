@@ -14,6 +14,7 @@ spec:
       labels:
         app.kubernetes.io/name: redis
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: redis
           image: redis:7-alpine
@@ -31,10 +32,30 @@ spec:
           ports:
             - name: redis
               containerPort: 6379
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
             exec:
-              command: ["sh", "-c", "redis-cli -a "$REDIS_PASSWORD" ping | grep PONG"]
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
             periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
+            periodSeconds: 10
+            timeoutSeconds: 3
           resources:
             requests:
               cpu: 50m
@@ -49,7 +70,8 @@ spec:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes:
+          - ReadWriteOnce
         storageClassName: local-path
         resources:
           requests:
