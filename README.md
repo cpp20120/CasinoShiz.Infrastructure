@@ -799,3 +799,80 @@ DELETE_LOCAL_REGISTRY=true \
 * manual backups проходят;
 * PostgreSQL и ClickHouse restore протестированы;
 * Alertmanager доставляет test alert.
+
+
+
+Images
+
+Имена images нельзя надёжно вывести из инфраструктурного репозитория, поэтому для remote build используется явная карта:
+
+[deployment]
+build_application_images = true
+
+[images]
+backend = {
+  source = "compose-backend:latest",
+  target = "casinoshiz-backend:local"
+}
+
+identity = {
+  source = "compose-identity:latest",
+  target = "casinoshiz-identity:local"
+}
+
+Для каждого image installer делает:
+
+docker compose build
+docker tag
+docker save
+sudo k3s ctr images import
+
+Helm values должны ссылаться на тот же target.
+Installer нужно передать:
+SSH user@IP
+SSH key
+ingress profile
+repo URLs
+domains
+age key path
+GitHub token для Flux bootstrap т.е. export GITHUB_TOKEN='github_pat_...'
+
+
+
+т.е. полный набор шагов
+
+# 1. Создал age key
+age-keygen -o ~/.config/sops/age/keys.txt
+
+# 2. Заполнил и зашифровал secrets
+sops --encrypt --in-place data/data.secret.yaml
+sops --encrypt --in-place \
+  clusters/production/casinoshiz/casinoshiz.secret.yaml
+sops --encrypt --in-place \
+  clusters/production/casinoshiz/ghcr.secret.yaml
+
+# 3. Указал images/domains/profile
+$EDITOR charts/casinoshiz/values-production.yaml
+$EDITOR deploy/installer.local.toml
+
+# 4. Проверил
+go-task clean
+go-task validate
+
+# 5. Отправил encrypted state в Git
+git add .
+git commit -m "configure production deployment"
+git push
+
+# 6. Запустил installer
+export GITHUB_TOKEN='...'
+
+python scripts/install.py \
+  --config deploy/installer.local.toml
+
+# 7. Проверил
+export KUBECONFIG="$PWD/.deploy/kubeconfig"
+
+flux get all -A
+kubectl get pods -A
+kubectl get pvc -A
