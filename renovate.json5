@@ -1,0 +1,28 @@
+{
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "description": "Group Kubernetes platform Helm chart updates",
+      "matchDatasources": ["helm"],
+      "groupName": "Kubernetes platform charts"
+    },
+    {
+      "description": "Do not automerge stateful data images",
+      "matchPackageNames": [
+        "postgres",
+        "redis",
+        "clickhouse/clickhouse-server",
+        "minio/minio",
+        "minio/mc"
+      ],
+      "automerge": false
+    }
+  ]
+}

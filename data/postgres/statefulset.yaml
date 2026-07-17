@@ -31,14 +31,45 @@ spec:
                 secretKeyRef:
                   name: data-secrets
                   key: postgres-superuser-password
+            - name: BACKEND_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: data-secrets
+                  key: backend-postgres-password
+            - name: IDENTITY_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: data-secrets
+                  key: identity-postgres-password
+            - name: WALLET_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: data-secrets
+                  key: wallet-postgres-password
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U postgres -d postgres
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
             exec:
-              command: ["sh", "-c", "pg_isready -U postgres -d postgres"]
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U postgres -d postgres
             periodSeconds: 5
+            timeoutSeconds: 3
           livenessProbe:
             exec:
-              command: ["sh", "-c", "pg_isready -U postgres -d postgres"]
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U postgres -d postgres
             periodSeconds: 10
+            timeoutSeconds: 3
           resources:
             requests:
               cpu: 100m
@@ -60,7 +91,8 @@ spec:
     - metadata:
         name: data
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes:
+          - ReadWriteOnce
         storageClassName: local-path
         resources:
           requests:

@@ -37,6 +37,14 @@ tasks:
     cmds:
       - helm lint {{.CHART}} -f {{.PRODUCTION_VALUES}}
 
+  yaml:lint:
+    desc: Lint YAML files when yamllint is installed
+    preconditions:
+      - sh: command -v yamllint >/dev/null
+        msg: Install yamllint to run YAML style validation
+    cmds:
+      - yamllint .
+
   render:chart:
     desc: Render the application Helm chart
     cmds:
@@ -95,6 +103,17 @@ tasks:
     cmds:
       - git grep -n CHANGE_ME || true
 
+  placeholders:check:
+    desc: Fail when unresolved CHANGE_ME values remain
+    cmds:
+      - |
+        matches="$(git grep -n CHANGE_ME || true)"
+        if [ -n "$matches" ]; then
+          printf '%s\n' "$matches"
+          echo "Unresolved CHANGE_ME values remain."
+          exit 1
+        fi
+
   validate:
     desc: Run all checks that do not require cluster access
     deps:
@@ -103,6 +122,33 @@ tasks:
       - render:cluster
     cmds:
       - task: secrets:check
+
+  release:check:
+    desc: Validate a repository intended for production deployment
+    cmds:
+      - task: validate
+      - task: placeholders:check
+      - test -z "$(git status --porcelain)" || { git status --short; echo "Working tree is not clean."; exit 1; }
+
+  preflight:
+    desc: Run production preflight against the configured cluster
+    cmds:
+      - ./scripts/preflight.sh
+
+  post-deploy:
+    desc: Verify a reconciled production cluster
+    cmds:
+      - ./scripts/post-deploy-check.sh
+
+  backup:manual:
+    desc: Run all backup CronJobs immediately and wait for completion
+    cmds:
+      - ./scripts/manual-backup.sh
+
+  status:
+    desc: Show production cluster status
+    cmds:
+      - ./scripts/cluster-status.sh
 
   ci:
     desc: CI entrypoint

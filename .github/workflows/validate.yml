@@ -3,7 +3,8 @@ name: Validate infrastructure
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -23,5 +24,11 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v1
 
-      - name: Validate
-        run: task ci
+      - name: Install yamllint
+        run: pipx install yamllint
+
+      - name: Validate manifests
+        run: go-task ci
+
+      - name: Lint YAML
+        run: go-task yaml:lint

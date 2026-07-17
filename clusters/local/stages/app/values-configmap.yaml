@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: casinoshiz-local-values
+  namespace: casinoshiz
+data:
+  values.yaml: |
+    global:
+      imageRegistry: k3d-casinoshiz-registry.localhost:5005
+      imagePullPolicy: Always
+
+    monitoring:
+      enabled: true
+
+    ingress:
+      enabled: false
+
+    frontend:
+      enabled: true
+      image:
+        repository: casinoshiz-frontend
+        tag: local
+
+    backendImage:
+      repository: casinoshiz-backend
+      tag: local
+
+    services:
+      identity:
+        image:
+          repository: casinoshiz-identity
+          tag: local
+      wallet:
+        image:
+          repository: casinoshiz-wallet
+          tag: local
+      telegram-bff:
+        image:
+          repository: casinoshiz-telegram-bff
+          tag: local
+        public: false
+      discord-bff:
+        enabled: false
+      admin-bff:
+        image:
+          repository: casinoshiz-admin-bff
+          tag: local
+        public: false
+      rest-api:
+        image:
+          repository: casinoshiz-rest-api
+          tag: local
+        public: false
+
+    autoscaling:
+      enabled: false

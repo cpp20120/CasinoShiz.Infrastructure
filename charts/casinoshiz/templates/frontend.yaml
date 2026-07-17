@@ -49,6 +49,7 @@ spec:
     - name: http
       port: 80
       targetPort: http
+{{- if .Values.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -73,4 +74,5 @@ spec:
                 name: frontend
                 port:
                   name: http
+{{- end }}
 {{- end }}

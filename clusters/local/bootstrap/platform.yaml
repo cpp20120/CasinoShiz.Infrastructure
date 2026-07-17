@@ -1,0 +1,20 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: casinoshiz-local-platform
+  namespace: flux-system
+spec:
+  interval: 5m
+  retryInterval: 30s
+  timeout: 15m
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: casinoshiz-infrastructure
+  path: ./clusters/local/stages/platform
+
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

@@ -1,0 +1,222 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: casinoshiz-platform
+  namespace: monitoring
+spec:
+  groups:
+    - name: casinoshiz-workloads
+      interval: 30s
+      rules:
+        - alert: CasinoShizPodCrashLooping
+          expr: |
+            max_over_time(
+              kube_pod_container_status_waiting_reason{
+                namespace=~"casinoshiz|data",
+                reason="CrashLoopBackOff"
+              }[10m]
+            ) >= 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod is crash-looping"
+            description: "{{ $labels.namespace }}/{{ $labels.pod }} has been in CrashLoopBackOff for at least 10 minutes."
+
+        - alert: CasinoShizPodNotReady
+          expr: |
+            min_over_time(
+              kube_pod_status_ready{
+                namespace=~"casinoshiz|data",
+                condition="true"
+              }[15m]
+            ) == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod is not ready"
+            description: "{{ $labels.namespace }}/{{ $labels.pod }} has not been ready for at least 15 minutes."
+
+        - alert: CasinoShizContainerRestarting
+          expr: |
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace=~"casinoshiz|data"
+              }[30m]
+            ) > 3
+          labels:
+            severity: warning
+          annotations:
+            summary: "Container restarts detected"
+            description: "{{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} restarted more than three times in 30 minutes."
+
+        - alert: CasinoShizDeploymentUnavailable
+          expr: |
+            kube_deployment_status_replicas_unavailable{
+              namespace="casinoshiz"
+            } > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "CasinoShiz Deployment has unavailable replicas"
+            description: "{{ $labels.deployment }} has unavailable replicas for at least 10 minutes."
+
+        - alert: CasinoShizStatefulSetUnavailable
+          expr: |
+            (
+              kube_statefulset_status_replicas_ready{
+                namespace="data"
+              }
+              <
+              kube_statefulset_replicas{
+                namespace="data"
+              }
+            )
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Data StatefulSet is unavailable"
+            description: "{{ $labels.statefulset }} does not have all requested replicas ready."
+
+    - name: casinoshiz-storage
+      interval: 60s
+      rules:
+        - alert: CasinoShizPersistentVolumeAlmostFull
+          expr: |
+            (
+              kubelet_volume_stats_available_bytes{
+                namespace=~"casinoshiz|data|monitoring|observability"
+              }
+              /
+              kubelet_volume_stats_capacity_bytes{
+                namespace=~"casinoshiz|data|monitoring|observability"
+              }
+            ) < 0.15
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Persistent volume is almost full"
+            description: "{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has less than 15% free space."
+
+        - alert: CasinoShizPersistentVolumeCritical
+          expr: |
+            (
+              kubelet_volume_stats_available_bytes{
+                namespace=~"casinoshiz|data|monitoring|observability"
+              }
+              /
+              kubelet_volume_stats_capacity_bytes{
+                namespace=~"casinoshiz|data|monitoring|observability"
+              }
+            ) < 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Persistent volume is critically full"
+            description: "{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has less than 5% free space."
+
+        - alert: CasinoShizPersistentVolumeErrors
+          expr: |
+            kube_persistentvolumeclaim_status_phase{
+              namespace=~"casinoshiz|data|monitoring|observability",
+              phase=~"Lost|Pending"
+            } == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PersistentVolumeClaim is not bound"
+            description: "{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is {{ $labels.phase }}."
+
+    - name: casinoshiz-backups
+      interval: 60s
+      rules:
+        - alert: CasinoShizBackupJobFailed
+          expr: |
+            kube_job_status_failed{
+              namespace="data",
+              job_name=~"(postgres|redis|clickhouse|minio)-backup-.*"
+            } > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backup Job failed"
+            description: "Backup Job {{ $labels.job_name }} failed."
+
+        - alert: CasinoShizBackupCronJobSuspended
+          expr: |
+            kube_cronjob_spec_suspend{
+              namespace="data",
+              cronjob=~"(postgres|redis|clickhouse|minio)-backup"
+            } == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Local backup CronJob is suspended"
+            description: "{{ $labels.cronjob }} has been suspended for at least 15 minutes."
+
+        - alert: CasinoShizCronJobMissedSchedule
+          expr: |
+            (
+              time()
+              -
+              kube_cronjob_next_schedule_time{
+                namespace="data",
+                cronjob=~"(postgres|redis|clickhouse|minio)-backup"
+              }
+            ) > 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backup CronJob may have missed its schedule"
+            description: "{{ $labels.cronjob }} is more than one hour past its reported next schedule."
+
+    - name: casinoshiz-capacity
+      interval: 60s
+      rules:
+        - alert: CasinoShizNodeMemoryPressure
+          expr: |
+            kube_node_status_condition{
+              condition="MemoryPressure",
+              status="true"
+            } == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kubernetes node is under memory pressure"
+            description: "The single production node reports MemoryPressure."
+
+        - alert: CasinoShizNodeDiskPressure
+          expr: |
+            kube_node_status_condition{
+              condition="DiskPressure",
+              status="true"
+            } == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kubernetes node is under disk pressure"
+            description: "The single production node reports DiskPressure."
+
+        - alert: CasinoShizNodeNotReady
+          expr: |
+            kube_node_status_condition{
+              condition="Ready",
+              status="true"
+            } == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Kubernetes node is not ready"
+            description: "The single production node has not been Ready for at least five minutes."
