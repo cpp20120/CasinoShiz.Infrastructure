@@ -14,17 +14,25 @@ data:
       discover:
         fileName: kustomization.yaml
       generate:
-        command: [/bin/sh, -ec]
+        command: 
+          - /bin/sh
+          - -ec
         args:
           - |
+            target="${ARGOCD_ENV_KUSTOMIZE_PATH:-.}"
             workdir=$(mktemp -d)
             trap 'rm -rf "$workdir"' EXIT
+
             cp -a . "$workdir/repo"
-            find "$workdir/repo" -type f \( -name '*.secret.yaml' -o -name '*.secret.yml' \) -exec sh -ec '
-              for file do
-                sops --decrypt --output "$file.dec" "$file"
-                mv "$file.dec" "$file"
-              done
-            ' sh {} +
+            
+            find "$workdir/repo/$target" 
+              -type f \( -name '*.secret.yaml' -o -name '*.secret.yml' \) \
+              -exec sh -ec '
+                for file do
+                  sops --decrypt --output "$file.dec" "$file"
+                  mv "$file.dec" "$file"
+                done
+              ' sh {} +
+            
             cd "$workdir/repo"
             kustomize build .

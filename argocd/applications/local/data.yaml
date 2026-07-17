@@ -5,17 +5,29 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "30"
+
 spec:
   project: casinoshiz
+
   source:
     repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
     targetRevision: migrate/complete-argocd-local
-    path: clusters/local/stages/data
+    path: .
     plugin:
       name: sops-kustomize-v1.0
+      env:
+        - name: KUSTOMIZE_PATH
+          value: clusters/local/stages/data
+
   destination:
     server: https://kubernetes.default.svc
     namespace: data
+
   syncPolicy:
-    automated: { prune: true, selfHeal: true }
-    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true
