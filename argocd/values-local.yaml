@@ -1,0 +1,9 @@
+global:
+  domain: argocd.casinoshiz.localhost
+
+server:
+  ingress:
+    enabled: false
+    hostname: ""
+    tls: false
+    annotations: {}
