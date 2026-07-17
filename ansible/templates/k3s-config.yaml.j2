@@ -1,0 +1,8 @@
+write-kubeconfig-mode: "0640"
+disable:
+{% if ingress_profile == "nginx" %}
+  - traefik
+{% endif %}
+node-label:
+  - "casinoshiz.io/environment=production"
+  - "casinoshiz.io/ingress={{ ingress_profile }}"

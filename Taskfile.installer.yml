@@ -1,0 +1,12 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Run the interactive remote installer
+    cmds:
+      - python scripts/install.py
+
+  install:dry-run:
+    desc: Preview the interactive remote installer
+    cmds:
+      - python scripts/install.py --dry-run

@@ -387,6 +387,15 @@ Rendered manifests сохраняются в:
 docs/LOCAL_FULL_SETUP.md
 ```
 
+```sh
+unzip -o CasinoShiz.Infrastructure.profile-installer.zip -d .
+chmod +x scripts/install.py
+
+python -m py_compile scripts/install.py
+go-task clean
+go-task validate
+````
+
 Общая последовательность:
 
 ### 1. Создать age key

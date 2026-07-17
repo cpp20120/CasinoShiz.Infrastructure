@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-edge-config
+  namespace: edge
+data:
+  nginx.conf: |
+    worker_processes auto;
+    worker_rlimit_nofile 65535;
+
+    events {
+        worker_connections 4096;
+        multi_accept on;
+        use epoll;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        access_log /dev/stdout;
+        error_log /dev/stderr warn;
+
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        keepalive_requests 10000;
+        server_tokens off;
+
+        client_max_body_size 32m;
+
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+
+        map $http_upgrade $connection_upgrade {
+            default upgrade;
+            ''      '';
+        }
+
+        upstream frontend_upstream {
+            server frontend.casinoshiz.svc.cluster.local:80;
+            keepalive 16;
+        }
+
+        upstream rest_api_upstream {
+            server rest-api.casinoshiz.svc.cluster.local:8080;
+            keepalive 32;
+        }
+
+        upstream admin_bff_upstream {
+            server admin-bff.casinoshiz.svc.cluster.local:8080;
+            keepalive 16;
+        }
+
+        upstream telegram_bff_upstream {
+            server telegram-bff.casinoshiz.svc.cluster.local:8080;
+            keepalive 16;
+        }
+
+        server {
+            listen 80 default_server;
+            listen [::]:80 default_server;
+            server_name _;
+
+            location = /edge-health {
+                access_log off;
+                add_header Content-Type text/plain;
+                return 200 "ok\n";
+            }
+
+            location / {
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $host;
+                proxy_set_header X-Forwarded-Port $server_port;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+
+                add_header X-Content-Type-Options nosniff always;
+                add_header X-Frame-Options SAMEORIGIN always;
+
+                proxy_pass http://frontend_upstream;
+            }
+        }
+    }

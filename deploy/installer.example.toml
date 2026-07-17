@@ -1,0 +1,43 @@
+[remote]
+ssh = "root@example.com"
+ssh_port = 22
+ssh_identity = ""
+workdir = "/srv/casinoshiz"
+python = "python3"
+
+[git]
+infrastructure_repo = "https://github.com/cpp20120/CasinoShiz.Infrastructure.git"
+infrastructure_branch = "main"
+application_repo = "https://github.com/cpp20120/CasinoShiz.git"
+application_branch = "main"
+github_owner = "cpp20120"
+github_repository = "CasinoShiz.Infrastructure"
+
+[deployment]
+ingress_profile = "traefik"
+environment = "production"
+run_ansible = true
+bootstrap_flux = true
+clone_application = true
+build_application_images = false
+wait_timeout_seconds = 1200
+
+[domains]
+frontend = "app.example.com"
+api = "api.example.com"
+admin = "admin.example.com"
+telegram = "bot.example.com"
+grafana = "grafana.example.com"
+
+[sops]
+age_key_file = "~/.config/sops/age/keys.txt"
+
+[images]
+# These are examples. Set source to the exact image produced by your app repo.
+backend = { source = "casinoshiz-backend:latest", target = "casinoshiz-backend:local" }
+identity = { source = "casinoshiz-identity:latest", target = "casinoshiz-identity:local" }
+wallet = { source = "casinoshiz-wallet:latest", target = "casinoshiz-wallet:local" }
+telegram_bff = { source = "casinoshiz-telegram-bff:latest", target = "casinoshiz-telegram-bff:local" }
+admin_bff = { source = "casinoshiz-admin-bff:latest", target = "casinoshiz-admin-bff:local" }
+rest_api = { source = "casinoshiz-rest-api:latest", target = "casinoshiz-rest-api:local" }
+frontend = { source = "casinoshiz-frontend:latest", target = "casinoshiz-frontend:local" }
