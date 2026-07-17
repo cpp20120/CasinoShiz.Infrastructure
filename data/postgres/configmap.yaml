@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: data
+data:
+  01-init-databases.sh: |
+    #!/bin/sh
+    set -eu
+
+    psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'backend') THEN
+        CREATE ROLE backend LOGIN PASSWORD 'backend-bootstrap-only';
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'identity') THEN
+        CREATE ROLE identity LOGIN PASSWORD 'identity-bootstrap-only';
+      END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'wallet') THEN
+        CREATE ROLE wallet LOGIN PASSWORD 'wallet-bootstrap-only';
+      END IF;
+    END
+    $$;
+
+    SELECT 'CREATE DATABASE backend OWNER backend'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'backend')\gexec
+    SELECT 'CREATE DATABASE identity OWNER identity'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identity')\gexec
+    SELECT 'CREATE DATABASE wallet OWNER wallet'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'wallet')\gexec
+    SQL

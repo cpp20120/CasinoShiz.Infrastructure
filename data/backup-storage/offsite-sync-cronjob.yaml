@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-offsite-sync
+  namespace: data
+spec:
+  suspend: true
+  schedule: "30 5 * * *"
+  timeZone: "Europe/Helsinki"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: sync
+              image: rclone/rclone:1.70
+              args:
+                - sync
+                - /backup
+                - remote:casinoshiz-backups
+                - --checksum
+                - --transfers=4
+                - --checkers=8
+              volumeMounts:
+                - name: backups
+                  mountPath: /backup
+                  readOnly: true
+                - name: config
+                  mountPath: /config/rclone
+                  readOnly: true
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: data-backups
+            - name: config
+              secret:
+                secretName: rclone-config

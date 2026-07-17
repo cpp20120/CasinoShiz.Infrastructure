@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: data
+spec:
+  schedule: "15 2 * * *"
+  timeZone: "Europe/Helsinki"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              env:
+                - name: PGHOST
+                  value: postgres.data.svc.cluster.local
+                - name: PGUSER
+                  value: postgres
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: data-secrets
+                      key: postgres-superuser-password
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  dir="/backup/postgres/$ts"
+                  mkdir -p "$dir"
+
+                  for db in backend identity wallet; do
+                    pg_dump                       --format=custom                       --compress=6                       --no-owner                       --no-privileges                       --dbname="$db"                       --file="$dir/$db.dump"
+                  done
+
+                  pg_dumpall --globals-only > "$dir/globals.sql"
+                  sha256sum "$dir"/* > "$dir/SHA256SUMS"
+
+                  # Keep 14 daily local backup sets.
+                  find /backup/postgres                     -mindepth 1 -maxdepth 1 -type d                     -mtime +13 -exec rm -rf {} +
+              volumeMounts:
+                - name: backups
+                  mountPath: /backup
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: data-backups

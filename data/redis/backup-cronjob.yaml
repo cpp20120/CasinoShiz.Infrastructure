@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: data
+spec:
+  schedule: "45 2 * * *"
+  timeZone: "Europe/Helsinki"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: redis:7-alpine
+              env:
+                - name: REDISCLI_AUTH
+                  valueFrom:
+                    secretKeyRef:
+                      name: data-secrets
+                      key: redis-password
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  redis-cli -h redis.data.svc.cluster.local BGSAVE
+                  while [ "$(redis-cli -h redis.data.svc.cluster.local LASTSAVE)" = "$(redis-cli -h redis.data.svc.cluster.local LASTSAVE)" ]; do
+                    sleep 2
+                    break
+                  done
+
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  mkdir -p "/backup/redis/$ts"
+                  cp /redis-data/dump.rdb "/backup/redis/$ts/dump.rdb"
+                  cp -a /redis-data/appendonlydir "/backup/redis/$ts/" 2>/dev/null || true
+                  sha256sum "/backup/redis/$ts"/* > "/backup/redis/$ts/SHA256SUMS" 2>/dev/null || true
+                  find /backup/redis -mindepth 1 -maxdepth 1 -type d -mtime +13 -exec rm -rf {} +
+              volumeMounts:
+                - name: redis-data
+                  mountPath: /redis-data
+                  readOnly: true
+                - name: backups
+                  mountPath: /backup
+          volumes:
+            - name: redis-data
+              persistentVolumeClaim:
+                claimName: data-redis-0
+            - name: backups
+              persistentVolumeClaim:
+                claimName: data-backups

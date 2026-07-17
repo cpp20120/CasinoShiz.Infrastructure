@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-backup-disk
+  namespace: data
+data:
+  backup_disk.xml: |
+    <clickhouse>
+      <storage_configuration>
+        <disks>
+          <backup>
+            <type>local</type>
+            <path>/backup/clickhouse/</path>
+          </backup>
+        </disks>
+      </storage_configuration>
+      <backups>
+        <allowed_disk>backup</allowed_disk>
+        <allowed_path>/backup/clickhouse/</allowed_path>
+      </backups>
+    </clickhouse>

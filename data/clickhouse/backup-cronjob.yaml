@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clickhouse-backup
+  namespace: data
+spec:
+  schedule: "30 3 * * *"
+  timeZone: "Europe/Helsinki"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: clickhouse/clickhouse-server:24.8-alpine
+              env:
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: data-secrets
+                      key: clickhouse-password
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  clickhouse-client                     --host clickhouse.data.svc.cluster.local                     --password "$CLICKHOUSE_PASSWORD"                     --query "BACKUP DATABASE cazinoshiz TO Disk('backup', '$ts')"
+
+                  find /backup/clickhouse                     -mindepth 1 -maxdepth 1 -type d                     -mtime +13 -exec rm -rf {} +
+              volumeMounts:
+                - name: backups
+                  mountPath: /backup
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: data-backups
