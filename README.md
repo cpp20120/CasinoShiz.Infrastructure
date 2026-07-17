@@ -911,7 +911,7 @@ host registry:
 localhost:5005
 
 cluster registry:
-k3d-casinoshiz-registry.localhost:5005
+k3d-casinoshiz-registry.localhost:5000
 ```
 
 ### Local images

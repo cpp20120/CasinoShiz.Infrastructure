@@ -6,7 +6,7 @@ metadata:
 data:
   values.yaml: |
     global:
-      imageRegistry: k3d-casinoshiz-registry.localhost:5005
+      imageRegistry: k3d-casinoshiz-registry.localhost:5000
       imagePullPolicy: Always
 
     monitoring:
