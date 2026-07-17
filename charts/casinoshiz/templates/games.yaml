@@ -45,6 +45,11 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.global.secretName }}
                   key: backend-postgres-connection-string
+            - name: Services__Operations__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: operations-api-key
           ports:
             - name: http
               containerPort: 8080

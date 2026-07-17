@@ -45,6 +45,14 @@ spec:
                   name: {{ $.Values.global.secretName }}
                   key: redis-connection-string
             {{- end }}
+            
+            {{- if eq $name "telegram-bff" }}
+            - name: Bot__Token
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: telegram-bot-token
+            {{- end }}
           ports:
             - name: http
               containerPort: {{ $svc.port }}
