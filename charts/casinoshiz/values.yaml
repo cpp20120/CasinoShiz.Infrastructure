@@ -8,48 +8,50 @@ global:
 common:
   replicas: 1
   resources:
-    requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: "1"
-      memory: 512Mi
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
 
 ingress:
   enabled: true
   className: traefik
   clusterIssuer: letsencrypt-production
 
+frontend:
+  enabled: true
+  replicas: 1
+  host: CHANGE_ME
+  image:
+    repository: casinoshiz-frontend
+    tag: latest
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
 services:
   identity:
     enabled: true
-    image:
-      repository: casinoshiz-identity
-      tag: latest
+    autoscaling: false
+    image: { repository: casinoshiz-identity, tag: latest }
     serviceName: identity
     postgresSecretKey: identity-postgres-connection-string
     redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: false
-
   wallet:
     enabled: true
-    image:
-      repository: casinoshiz-wallet
-      tag: latest
+    autoscaling: false
+    image: { repository: casinoshiz-wallet, tag: latest }
     serviceName: wallet
     postgresSecretKey: wallet-postgres-connection-string
     redisEnabled: false
     port: 8080
     grpcPort: 8081
     public: false
-
   telegram-bff:
     enabled: true
-    image:
-      repository: casinoshiz-telegram-bff
-      tag: latest
+    autoscaling: true
+    image: { repository: casinoshiz-telegram-bff, tag: latest }
     serviceName: telegram-bff
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: true
@@ -57,24 +59,20 @@ services:
     grpcPort: 8081
     public: true
     host: tg.example.com
-
   discord-bff:
     enabled: true
-    image:
-      repository: casinoshiz-discord-bff
-      tag: latest
+    autoscaling: true
+    image: { repository: casinoshiz-discord-bff, tag: latest }
     serviceName: discord-bff
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: true
     port: 8080
     grpcPort: 8081
     public: false
-
   admin-bff:
     enabled: true
-    image:
-      repository: casinoshiz-admin-bff
-      tag: latest
+    autoscaling: false
+    image: { repository: casinoshiz-admin-bff, tag: latest }
     serviceName: admin-bff
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: false
@@ -82,12 +80,10 @@ services:
     grpcPort: 8081
     public: true
     host: admin.example.com
-
   rest-api:
     enabled: true
-    image:
-      repository: casinoshiz-rest-api
-      tag: latest
+    autoscaling: true
+    image: { repository: casinoshiz-rest-api, tag: latest }
     serviceName: rest-api
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: false
@@ -121,7 +117,7 @@ games:
   admin: { enabled: true }
 
 autoscaling:
-  enabled: false
+  enabled: true
   minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 65

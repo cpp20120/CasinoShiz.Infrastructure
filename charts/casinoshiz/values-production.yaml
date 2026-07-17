@@ -1,46 +1,29 @@
 global:
   imageRegistry: ghcr.io/cpp20120
 
-ingress:
-  enabled: true
-  className: traefik
-  clusterIssuer: letsencrypt-production
+frontend:
+  host: CHANGE_ME
+  image:
+    repository: casinoshiz-frontend
+    tag: CHANGE_ME
 
 backendImage:
   repository: casinoshiz-backend
-  tag: CHANGE_ME_BACKEND_DIGEST_OR_TAG
+  tag: CHANGE_ME
 
 services:
   identity:
-    image:
-      repository: casinoshiz-identity
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-identity, tag: CHANGE_ME }
   wallet:
-    image:
-      repository: casinoshiz-wallet
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-wallet, tag: CHANGE_ME }
   telegram-bff:
-    image:
-      repository: casinoshiz-telegram-bff
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-telegram-bff, tag: CHANGE_ME }
     host: tg.CHANGE_ME
   discord-bff:
-    image:
-      repository: casinoshiz-discord-bff
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-discord-bff, tag: CHANGE_ME }
   admin-bff:
-    image:
-      repository: casinoshiz-admin-bff
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-admin-bff, tag: CHANGE_ME }
     host: admin.CHANGE_ME
   rest-api:
-    image:
-      repository: casinoshiz-rest-api
-      tag: CHANGE_ME
+    image: { repository: casinoshiz-rest-api, tag: CHANGE_ME }
     host: api.CHANGE_ME
-
-autoscaling:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 65

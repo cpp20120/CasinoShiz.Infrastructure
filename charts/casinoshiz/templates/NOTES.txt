@@ -1,0 +1,4 @@
+CasinoShiz workloads installed.
+
+Public endpoints depend on replacing CHANGE_ME hosts and creating the SOPS-encrypted
+casinoshiz-secrets Secret.

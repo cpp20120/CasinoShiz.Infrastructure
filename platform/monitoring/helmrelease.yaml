@@ -13,18 +13,59 @@ spec:
         name: victoria-metrics
         namespace: flux-system
   values:
+    nameOverride: vmks
+
     vmsingle:
       enabled: true
       spec:
         retentionPeriod: "14d"
         storage:
           accessModes: ["ReadWriteOnce"]
+          storageClassName: local-path
           resources:
             requests:
               storage: 20Gi
+
     vmcluster:
       enabled: false
-    grafana:
+
+    vmagent:
+      spec:
+        scrapeInterval: 30s
+
+    vmalert:
       enabled: true
+
     alertmanager:
       enabled: true
+
+    grafana:
+      enabled: true
+      persistence:
+        enabled: true
+        storageClassName: local-path
+        size: 5Gi
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-production
+        hosts:
+          - grafana.CHANGE_ME
+        tls:
+          - secretName: grafana-tls
+            hosts:
+              - grafana.CHANGE_ME
+      additionalDataSources:
+        - name: Tempo
+          type: tempo
+          access: proxy
+          url: http://tempo.observability.svc.cluster.local:3100
+          isDefault: false
+          jsonData:
+            tracesToLogsV2:
+              datasourceUid: ""
+            serviceMap:
+              datasourceUid: VictoriaMetrics
+            nodeGraph:
+              enabled: true

@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-letsencrypt-production-issuer
+  namespace: cert-manager
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 20
+  template:
+    spec:
+      serviceAccountName: cert-manager-issuer-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: kubectl
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until kubectl get crd clusterissuers.cert-manager.io >/dev/null 2>&1; do
+                sleep 3
+              done
+              cat <<'YAML' | kubectl apply -f -
+              apiVersion: cert-manager.io/v1
+              kind: ClusterIssuer
+              metadata:
+                name: letsencrypt-production
+              spec:
+                acme:
+                  email: CHANGE_ME
+                  server: https://acme-v02.api.letsencrypt.org/directory
+                  privateKeySecretRef:
+                    name: letsencrypt-production-account
+                  solvers:
+                    - http01:
+                        ingress:
+                          ingressClassName: traefik
+              YAML

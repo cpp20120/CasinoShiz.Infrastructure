@@ -3,7 +3,9 @@ kind: Kustomization
 resources:
   - ../../platform/namespaces
   - ../../platform/cert-manager
+  - ../../platform/keda
   - ../../platform/monitoring
   - ../../platform/tracing
+  - ../../platform/network-policies
   - ../../data
   - ./casinoshiz
