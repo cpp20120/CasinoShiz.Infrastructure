@@ -37,8 +37,19 @@ spec:
       app.kubernetes.io/part-of: casinoshiz
   jobLabel: app.kubernetes.io/name
   endpoints:
+    # Metrics v3 is split into metric-group endpoints. The base endpoint does
+    # not expose every series used by the Grafana dashboard.
     - port: api
-      path: /minio/metrics/v3
+      path: /minio/metrics/v3/cluster/health
+      interval: 30s
+    - port: api
+      path: /minio/metrics/v3/cluster/usage/buckets
+      interval: 30s
+    - port: api
+      path: /minio/metrics/v3/api/requests
+      interval: 30s
+    - port: api
+      path: /minio/metrics/v3/system/drive
       interval: 30s
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
