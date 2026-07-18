@@ -1,7 +1,9 @@
 {{- $gameRouteKeys := dict "dice" "Dice" "dicecube" "DiceCube" "darts" "Darts" "football" "Football" "basketball" "Basketball" "bowling" "Bowling" "transfer" "Transfer" "redeem" "Redeem" "leaderboard" "Leaderboard" "pixelbattle" "PixelBattle" "pick" "Pick" "blackjack" "Blackjack" "horse" "Horse" "challenges" "Challenges" "poker" "Poker" "secrethitler" "SecretHitler" "meta" "Meta" "admin" "Admin" }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
-{{- $isBff := or (eq $name "telegram-bff") (eq $name "discord-bff") }}
+{{- $isTelegramBff := or (eq $name "telegram-bff") (eq (default "" $svc.channel) "telegram") }}
+{{- $isBff := or $isTelegramBff (eq $name "discord-bff") (eq (default "" $svc.channel) "discord") }}
+{{- $isAdmin := or (eq $name "admin-bff") (eq (default "" $svc.role) "admin") }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -55,7 +57,7 @@ spec:
             - name: Backend__GrpcAddress
               value: "http://game-admin:8081"
             {{- end }}
-            {{- if eq $name "admin-bff" }}
+            {{- if $isAdmin }}
             - name: Services__Backend__Address
               value: "http://game-admin:8080"
             - name: Services__Backend__GrpcAddress
@@ -73,7 +75,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.global.secretName }}
-                  key: admin-web-token
+                  key: {{ default "admin-web-token" $svc.adminTokenKey }}
+            {{- if $svc.cookieName }}
+            - name: Admin__CookieName
+              value: {{ $svc.cookieName | quote }}
+            {{- end }}
             {{- end }}
             - name: ConnectionStrings__Postgres
               valueFrom:
@@ -90,12 +96,16 @@ spec:
                   key: redis-connection-string
             {{- end }}
             
-            {{- if eq $name "telegram-bff" }}
+            {{- if $isTelegramBff }}
             - name: Bot__Token
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.global.secretName }}
-                  key: telegram-bot-token
+                  key: {{ default "telegram-bot-token" $svc.tokenKey }}
+            {{- if $svc.tenantKey }}
+            - name: Bot__TenantKey
+              value: {{ $svc.tenantKey | quote }}
+            {{- end }}
             {{- end }}
           ports:
             - name: http
@@ -110,7 +120,7 @@ spec:
             periodSeconds: 2
           readinessProbe:
             httpGet:
-              path: {{ if eq $name "telegram-bff" }}/health/live{{ else }}/health/ready{{ end }}
+              path: {{ if $isTelegramBff }}/health/live{{ else }}/health/ready{{ end }}
               port: http
             periodSeconds: 5
             timeoutSeconds: 3

@@ -55,6 +55,8 @@ services:
     enabled: true
     autoscaling: true
     image: { repository: casinoshiz-telegram-bff, tag: latest }
+    channel: telegram
+    tokenKey: telegram-bot-token
     serviceName: telegram-bff
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: true
@@ -76,6 +78,8 @@ services:
     enabled: true
     autoscaling: false
     image: { repository: casinoshiz-admin-bff, tag: latest }
+    role: admin
+    adminTokenKey: admin-web-token
     serviceName: admin-bff
     postgresSecretKey: backend-postgres-connection-string
     redisEnabled: false

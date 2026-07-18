@@ -35,6 +35,20 @@ services:
     image: { repository: casinoshiz-telegram-bff, tag: local }
     host: tg.casinoshiz.localhost
     autoscaling: false
+  telegram-bff-2:
+    enabled: true
+    autoscaling: false
+    image: { repository: casinoshiz-telegram-bff, tag: local }
+    channel: telegram
+    tokenKey: telegram-bot-token-2
+    tenantKey: bot2
+    serviceName: telegram-bff-2
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: true
+    port: 8080
+    grpcPort: 8081
+    public: true
+    host: tg2.casinoshiz.localhost
   discord-bff:
     enabled: false
     image: { repository: casinoshiz-discord-bff, tag: local }
@@ -43,6 +57,20 @@ services:
     image: { repository: casinoshiz-admin-bff, tag: local }
     host: admin.casinoshiz.localhost
     autoscaling: false
+  admin-bff-2:
+    enabled: true
+    autoscaling: false
+    image: { repository: casinoshiz-admin-bff, tag: local }
+    role: admin
+    adminTokenKey: admin-web-token-2
+    cookieName: casinoshiz.admin.bot2
+    serviceName: admin-bff-2
+    postgresSecretKey: backend-postgres-connection-string
+    redisEnabled: false
+    port: 8080
+    grpcPort: 8081
+    public: true
+    host: admin2.casinoshiz.localhost
   rest-api:
     image: { repository: casinoshiz-rest-api, tag: local }
     host: api.casinoshiz.localhost
