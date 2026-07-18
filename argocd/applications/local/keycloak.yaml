@@ -170,7 +170,7 @@ spec:
                           fi
                           /opt/keycloak/bin/kcadm.sh set-password -r "$realm" \
                             --username "$SSO_ADMIN_USER" \
-                            --new-password:"$SSO_ADMIN_PASSWORD" \
+                            --new-password "$SSO_ADMIN_PASSWORD" \
                             --temporary=false
 
                           for group in platform-admins; do
