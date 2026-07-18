@@ -19,6 +19,13 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  ignoreDifferences:
+    - group: operator.victoriametrics.com
+      kind: VMRule
+      name: casinoshiz-platform
+      namespace: monitoring
+      jqPathExpressions:
+        - .spec.groups[].rules[].record
   syncPolicy:
     automated:
       prune: true
