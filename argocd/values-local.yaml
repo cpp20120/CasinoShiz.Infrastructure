@@ -3,7 +3,8 @@ global:
 
 server:
   ingress:
-    enabled: false
-    hostname: ""
+    enabled: true
+    ingressClassName: traefik
+    hostname: argocd.casinoshiz.localhost
     tls: false
     annotations: {}
