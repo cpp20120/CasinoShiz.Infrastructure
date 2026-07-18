@@ -1268,7 +1268,7 @@ kubectl top pods -A --sort-by=memory
 
 ## Failure tests
 
-Перед признанием production deployment готовым необходимо проверить восстановление после отказов.
+Failure tests проверяют восстановление после отказов и сохранность данных.
 
 Удаление Pod:
 
@@ -1359,31 +1359,3 @@ OpenTofu не требуется для управления текущим Kube
 Внутри кластера основным владельцем ресурсов остаётся Argo CD.
 
 ---
-
-## Готовность к production
-
-Инфраструктура готова к первому production deployment, когда выполнены все условия:
-
-* `go-task validate` проходит;
-* `go-task release:check` проходит;
-* production placeholders отсутствуют;
-* GitHub Actions зелёный;
-* SOPS Secrets зашифрованы;
-* age private key сохранён вне Git;
-* Argo CD `sops-age` Secret создан;
-* application images опубликованы;
-* GHCR pull Secret работает;
-* DNS настроен;
-* TLS certificates выпущены;
-* Argo CD resources находятся в `Ready`;
-* все Pods находятся в ожидаемом состоянии;
-* все PVC находятся в `Bound`;
-* manual backups проходят;
-* PostgreSQL restore протестирован;
-* ClickHouse restore протестирован;
-* Redis backup verification проходит;
-* MinIO restore протестирован;
-* NetworkPolicy фактически проверены;
-* Pod recreation не приводит к потере данных;
-* VPS reboot не ломает reconciliation;
-* Alertmanager доставляет test alert.
