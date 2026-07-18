@@ -6,6 +6,7 @@ configMapGenerator:
     files:
       - casinoshiz-microservices.json
       - casinoshiz-data.json
+      - minio.json
       - casinoshiz-alerts.json
       - legacy/analytics-clickhouse.json
       - legacy/clickhouse-events-explorer.json

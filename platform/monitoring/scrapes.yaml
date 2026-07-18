@@ -22,6 +22,28 @@ spec:
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
 metadata:
+  name: casinoshiz-minio
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
+spec:
+  namespaceSelector:
+    matchNames:
+      - data
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+      app.kubernetes.io/component: object-storage
+      app.kubernetes.io/part-of: casinoshiz
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: api
+      path: /minio/metrics/v3
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
   name: casinoshiz-data-exporters
   namespace: monitoring
   labels:

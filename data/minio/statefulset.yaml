@@ -29,6 +29,8 @@ spec:
                 secretKeyRef:
                   name: data-secrets
                   key: minio-root-password
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: public
           ports:
             - name: api
               containerPort: 9000
