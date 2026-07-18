@@ -16,6 +16,8 @@ spec:
       valuesObject:
         fullnameOverride: keycloak
         image:
+          registry: docker.io
+          repository: bitnamilegacy/keycloak
           tag: 26.3.3-debian-12-r0
         auth:
           adminUser: admin
@@ -33,6 +35,10 @@ spec:
             memory: 1Gi
         postgresql:
           enabled: true
+          image:
+            registry: docker.io
+            repository: bitnamilegacy/postgresql
+            tag: 17.6.0-debian-12-r0
           auth:
             username: keycloak
             database: keycloak
