@@ -1,0 +1,65 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: local-victoria-metrics
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: casinoshiz
+  source:
+    repoURL: https://victoriametrics.github.io/helm-charts/
+    chart: victoria-metrics-k8s-stack
+    targetRevision: '*'
+    helm:
+      releaseName: vmks
+      valuesObject:
+        vmsingle:
+          enabled: true
+          spec:
+            retentionPeriod: 1d
+            storage:
+              accessModes: [ReadWriteOnce]
+              storageClassName: local-path
+              resources:
+                requests: { storage: 2Gi }
+        vmcluster: { enabled: false }
+        vmagent:
+          spec:
+            # Scrape every VMServiceScrape, including resources declared in
+            # data, observability and application namespaces.
+            serviceScrapeSelector: {}
+            serviceScrapeNamespaceSelector: {}
+            selectAllByDefault: true
+        vmalert:
+          enabled: true
+          spec:
+            evaluationInterval: 30s
+        alertmanager:
+          enabled: true
+        grafana:
+          enabled: true
+          persistence: { enabled: false }
+          plugins:
+            - grafana-clickhouse-datasource
+          envValueFrom:
+            CLICKHOUSE_PASSWORD:
+              secretKeyRef:
+                name: grafana-clickhouse-secret
+                key: clickhouse-password
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts: [grafana.casinoshiz.localhost]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, PruneLast=true, ServerSideApply=true]

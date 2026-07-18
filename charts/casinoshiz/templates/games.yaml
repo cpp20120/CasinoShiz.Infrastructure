@@ -33,6 +33,10 @@ spec:
               value: "game-{{ $name }}"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.global.otelEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: "10000"
             - name: Redis__Enabled
               value: "true"
             - name: Redis__ConnectionString
@@ -45,11 +49,36 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.global.secretName }}
                   key: backend-postgres-connection-string
+            - name: Services__Identity__Mode
+              value: "Grpc"
+            - name: Services__Identity__Address
+              value: "http://identity:8081"
+            - name: Services__Wallet__Mode
+              value: "Grpc"
+            - name: Services__Wallet__Address
+              value: "http://wallet:8081"
             - name: Services__Operations__ApiKey
               valueFrom:
                 secretKeyRef:
                   name: {{ $.Values.global.secretName }}
                   key: operations-api-key
+            - name: ClickHouse__Enabled
+              value: "true"
+            - name: ClickHouse__Host
+              value: "http://clickhouse.data.svc.cluster.local:8123"
+            - name: ClickHouse__User
+              value: "default"
+            - name: ClickHouse__Password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: clickhouse-password
+            - name: ClickHouse__Database
+              value: "cazinoshiz"
+            - name: ClickHouse__Table
+              value: "events_v2"
+            - name: ClickHouse__Project
+              value: "cazinoshiz"
           ports:
             - name: http
               containerPort: 8080

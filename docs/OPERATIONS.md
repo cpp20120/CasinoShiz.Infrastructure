@@ -9,7 +9,7 @@ Implemented:
 
 - host bootstrap with Ansible;
 - single-node k3s;
-- Flux-compatible GitOps repository structure;
+- Argo CD-compatible GitOps repository structure;
 - Traefik ingress supplied by k3s;
 - cert-manager and Let's Encrypt ClusterIssuer bootstrap;
 - application Helm chart;
@@ -72,7 +72,7 @@ Applications
 Infrastructure ownership is split as follows:
 
 - **Ansible** owns the operating system and k3s installation.
-- **Flux** owns Kubernetes resources.
+- **Argo CD** owns Kubernetes resources.
 - **Helm** renders CasinoShiz application workloads.
 - **Kustomize** composes the production cluster tree.
 - **SOPS + age** will own encrypted secrets.
@@ -119,9 +119,9 @@ Taskfile.yml
 | Path | Purpose |
 |---|---|
 | `ansible/playbooks/site.yml` | Prepare the VPS and install k3s |
-| `clusters/production/kustomization.yaml` | Production Flux entrypoint |
+| `clusters/production/kustomization.yaml` | Production Argo CD entrypoint |
 | `charts/casinoshiz/values-production.yaml` | Production application values |
-| `clusters/production/casinoshiz/values-configmap.yaml` | Values consumed by Flux HelmRelease |
+| `clusters/production/casinoshiz/values-configmap.yaml` | Values consumed by Argo CD Application |
 | `data/data.secret.yaml.example` | Data secret example |
 | `clusters/production/casinoshiz/casinoshiz.secret.yaml.example` | Application secret example |
 | `platform/monitoring/helmrelease.yaml` | VictoriaMetrics and Grafana |
@@ -143,13 +143,13 @@ sudo pacman -S \
   kubectl
 ```
 
-Flux, SOPS and age are required for the final deployment stage:
+Argo CD, SOPS and age are required for the final deployment stage:
 
 ```bash
 sudo pacman -S sops age
 ```
 
-Install the Flux CLI using its official installation method or an appropriate
+Install the Argo CD CLI using its official installation method or an appropriate
 distribution package.
 
 Verify tools:
@@ -326,9 +326,9 @@ server     Ready    control-plane,master   ...   ...
 
 ---
 
-## Flux bootstrap
+## Argo CD bootstrap
 
-Flux should reconcile:
+Argo CD should reconcile:
 
 ```text
 clusters/production
@@ -339,18 +339,13 @@ Example bootstrap:
 ```bash
 export GITHUB_TOKEN=...
 
-flux bootstrap github \
-  --owner=cpp20120 \
-  --repository=CasinoShiz.Infrastructure \
-  --branch=main \
-  --path=clusters/production \
-  --personal
+python scripts/installer.py --config deploy/installer.toml
 ```
 
 After bootstrap:
 
 ```bash
-flux get all -A
+kubectl get applications -n argocd
 kubectl get helmreleases -A
 kubectl get kustomizations -A
 ```
@@ -694,11 +689,11 @@ does not implement it.
 
 ## Common diagnostics
 
-### Flux
+### Argo CD
 
 ```bash
-flux get all -A
-flux logs --all-namespaces --level=error
+kubectl get applications -n argocd
+kubectl logs -n argocd deployment/argocd-application-controller
 ```
 
 ### Pods
@@ -710,7 +705,7 @@ kubectl logs <pod> -n <namespace>
 kubectl logs <pod> -n <namespace> --previous
 ```
 
-### HelmRelease
+### Application
 
 ```bash
 kubectl get helmreleases -A
@@ -772,9 +767,9 @@ less .task/rendered/production.yaml
 
 ### GitOps
 
-- [ ] Flux bootstrap succeeds.
-- [ ] All Flux Kustomizations are ready.
-- [ ] All HelmReleases are ready.
+- [ ] Argo CD bootstrap succeeds.
+- [ ] All Argo CD Applications are ready.
+- [ ] All Argo CD Applications are ready.
 - [ ] cert-manager ClusterIssuer is ready.
 - [ ] TLS certificates are issued.
 
@@ -834,7 +829,7 @@ The infrastructure is ready for first production deployment when:
 3. SOPS-encrypted secrets exist;
 4. DNS records resolve to the VPS;
 5. application images exist in GHCR;
-6. Flux reconciles successfully;
+6. Argo CD reconciles successfully;
 7. backups and at least one restore are tested.
 
 Until all seven conditions are satisfied, the repository is a complete

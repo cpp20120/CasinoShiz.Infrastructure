@@ -8,4 +8,5 @@
 - [Data backups](data-backups.md)
 - [Migration from Compose](migration-from-compose.md)
 - [Platform completion notes](platform-complete.md)
+- [Vault secrets](VAULT.md)
 - [Next steps](next-steps.md)

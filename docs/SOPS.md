@@ -70,17 +70,17 @@ The check requires every tracked production `*.secret.yaml` file to:
 
 It sends decrypted output to `/dev/null` and does not print plaintext.
 
-## Flux bootstrap
+## Argo CD bootstrap
 
 The installer creates:
 
 ```text
-namespace: flux-system
+namespace: argocd
 Secret: sops-age
 key: age.agekey
 ```
 
-Flux Kustomizations that include encrypted manifests require:
+Argo CD Applications that include encrypted manifests require:
 
 ```yaml
 spec:

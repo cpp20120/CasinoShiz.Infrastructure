@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmp-sops-kustomize
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: sops-kustomize
+    spec:
+      version: v1.0
+      generate:
+        command: 
+          - /bin/sh
+          - -ec
+        args:
+          - |
+            target="${ARGOCD_ENV_KUSTOMIZE_PATH:-.}"
+            workdir=$(mktemp -d)
+            trap 'rm -rf "$workdir"' EXIT
+
+            cp -a . "$workdir/repo"
+
+            find "$workdir/repo/$target" \
+              -type f \( -name '*.secret.yaml' -o -name '*.secret.yml' \) \
+              -exec sh -ec '
+                for file do
+                  sops --decrypt --output "$file.dec" "$file"
+                  mv "$file.dec" "$file"
+                done
+              ' sh {} +
+
+            cd "$workdir/repo/$target"
+            kustomize build .

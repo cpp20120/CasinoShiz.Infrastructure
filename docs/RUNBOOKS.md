@@ -3,8 +3,8 @@
 ## Deployment does not reconcile
 
 ```bash
-flux get all -A
-flux logs --all-namespaces --level=error
+kubectl get applications -n argocd
+kubectl logs -n argocd deployment/argocd-application-controller
 kubectl get kustomizations -A
 kubectl get helmreleases -A
 ```
@@ -113,12 +113,12 @@ Scale application deployments to zero while preserving data services:
 kubectl scale deployment --all   -n casinoshiz   --replicas=0
 ```
 
-Reconcile Git before relying on this as a lasting state, otherwise Flux may
+Reconcile Git before relying on this as a lasting state, otherwise Argo CD may
 restore the declared replica counts.
 
 ## Emergency rollback
 
-Prefer changing image tags in Git and allowing Flux to reconcile.
+Prefer changing image tags in Git and allowing Argo CD to reconcile.
 
 For temporary diagnosis:
 

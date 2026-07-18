@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: casinoshiz-vmagent-config-reader
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - vmagent-vmks-victoria-metrics-k8s-stack
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: casinoshiz-vmagent-config-reader
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: casinoshiz-vmagent-config-reader
+subjects:
+  - kind: ServiceAccount
+    name: vmagent-vmks-victoria-metrics-k8s-stack
+    namespace: monitoring

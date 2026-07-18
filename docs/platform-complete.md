@@ -5,8 +5,10 @@ This patch completes the non-secret platform layer:
 - cert-manager and Let's Encrypt ClusterIssuer bootstrap;
 - KEDA operator;
 - VictoriaMetrics, VMAlert, Alertmanager and Grafana;
+- VictoriaMetrics dashboards and PostgreSQL/Redis exporters;
 - monolithic Tempo with a PVC;
 - OpenTelemetry Collector;
+- local Vault and External Secrets Operator bootstrap;
 - frontend Deployment, Service and Ingress;
 - HPA for selected HTTP/gRPC services and all game workers;
 - baseline ingress NetworkPolicies;
@@ -39,5 +41,5 @@ through Ingress. Grafana accesses it through the cluster Service.
 1. Replace `CHANGE_ME` values.
 2. Run GitHub Actions successfully.
 3. Add encrypted secrets.
-4. Bootstrap Flux.
+4. Bootstrap Argo CD.
 5. Verify certificates, PVCs, scrape targets and backup Jobs.

@@ -35,7 +35,7 @@ A backup is not considered reliable until a restore has been tested.
 ## Secret installation
 
 Copy the examples, replace values, encrypt with SOPS, then add the encrypted
-files to the appropriate Kustomization:
+files to the appropriate Application:
 
 ```bash
 cp data/data.secret.yaml.example data/data.secret.yaml

@@ -1,0 +1,22 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"type":"stat","title":"Unavailable deployments","gridPos":{"h":4,"w":8,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(kube_deployment_status_replicas_unavailable{namespace=\"casinoshiz\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Pending / failed PVCs","gridPos":{"h":4,"w":8,"x":8,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(kube_persistentvolumeclaim_status_phase{phase=~\"Pending|Lost\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Failed backup jobs","gridPos":{"h":4,"w":8,"x":16,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(kube_job_status_failed{namespace=\"data\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"timeseries","title":"CrashLoopBackOff by pod","gridPos":{"h":9,"w":12,"x":0,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"max by (pod, container) (kube_pod_container_status_waiting_reason{namespace=\"casinoshiz\",reason=\"CrashLoopBackOff\"})","legendFormat":"{{pod}} / {{container}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","min":0,"max":1},"overrides":[]}},
+    {"type":"timeseries","title":"Container restarts","gridPos":{"h":9,"w":12,"x":12,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"casinoshiz\"}[30m]))","legendFormat":"{{pod}} / {{container}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","min":0},"overrides":[]}},
+    {"type":"table","title":"Pods not ready now","gridPos":{"h":9,"w":24,"x":0,"y":13},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"kube_pod_status_ready{namespace=\"casinoshiz\",condition=\"true\"} == 0","format":"table","instant":true,"refId":"A"}],"options":{"footer":{"show":false},"showHeader":true}}
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["casinoshiz", "victoriametrics", "alerts", "kubernetes"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "CasinoShiz · Reliability",
+  "uid": "cazinoshiz-reliability-vm",
+  "version": 1
+}

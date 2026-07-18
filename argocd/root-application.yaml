@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: casinoshiz-production
+  namespace: argocd
+spec:
+  project: casinoshiz
+  source:
+    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
+    targetRevision: main
+    path: argocd/applications/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true

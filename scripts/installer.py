@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import re
@@ -123,7 +122,7 @@ class DeploymentConfig:
     ingress_profile: str = "traefik"
     environment: str = "production"
     run_ansible: bool = True
-    bootstrap_flux: bool = True
+    bootstrap_argocd: bool = True
     clone_application: bool = True
     build_application_images: bool = False
     wait_timeout_seconds: int = 1200
@@ -211,7 +210,7 @@ def load_config(path: Path | None, ssh_override: str | None) -> InstallerConfig:
             ingress_profile=ingress,
             environment=dict_get(raw, "deployment.environment", "production"),
             run_ansible=bool(dict_get(raw, "deployment.run_ansible", True)),
-            bootstrap_flux=bool(dict_get(raw, "deployment.bootstrap_flux", True)),
+            bootstrap_argocd=bool(dict_get(raw, "deployment.bootstrap_argocd", True)),
             clone_application=bool(dict_get(raw, "deployment.clone_application", True)),
             build_application_images=bool(
                 dict_get(raw, "deployment.build_application_images", False)
@@ -277,7 +276,7 @@ class Installer:
         return args
 
     def require_tools(self) -> None:
-        required = ["ssh", "scp", "git", "ansible-playbook", "kubectl", "flux", "sops", "age-keygen"]
+        required = ["ssh", "scp", "git", "ansible-playbook", "kubectl", "helm", "sops", "age-keygen", "go-task"]
         missing = [tool for tool in required if not command_exists(tool)]
         if missing:
             raise InstallError("Missing local tools: " + ", ".join(missing))
@@ -322,7 +321,7 @@ class Installer:
         print(f"Application:      {self.config.git.application_repo or '(not configured)'}")
         print(f"Remote directory: {self.config.remote.workdir}")
         print(f"Run Ansible:      {self.config.deployment.run_ansible}")
-        print(f"Bootstrap Flux:   {self.config.deployment.bootstrap_flux}")
+        print(f"Bootstrap Argo CD:   {self.config.deployment.bootstrap_argocd}")
         print()
         if not ask_bool("Continue", True):
             raise InstallError("Cancelled")
@@ -510,14 +509,14 @@ class Installer:
         age_key = Path(os.path.expanduser(self.config.sops.age_key_file))
         if not age_key.exists():
             raise InstallError(f"Age key does not exist: {age_key}")
-        info("Installing age identity into flux-system")
+        info("Installing age identity into argocd")
         if self.dry_run:
             return
 
         env = self.kubectl_env()
-        run(["kubectl", "create", "namespace", "flux-system", "--dry-run=client", "-o", "yaml"], env=env, capture=True)
+        run(["kubectl", "create", "namespace", "argocd", "--dry-run=client", "-o", "yaml"], env=env, capture=True)
         namespace_yaml = run(
-            ["kubectl", "create", "namespace", "flux-system", "--dry-run=client", "-o", "yaml"],
+            ["kubectl", "create", "namespace", "argocd", "--dry-run=client", "-o", "yaml"],
             env=env,
             capture=True,
         ).stdout
@@ -531,8 +530,8 @@ class Installer:
                 "generic",
                 "sops-age",
                 "-n",
-                "flux-system",
-                f"--from-file=age.agekey={age_key}",
+                "argocd",
+                f"--from-file=keys.txt={age_key}",
                 "--dry-run=client",
                 "-o",
                 "yaml",
@@ -543,39 +542,27 @@ class Installer:
         ).stdout
         run(["kubectl", "apply", "-f", "-"], env=env, input_text=secret_yaml, sensitive=True)
 
-    def bootstrap_flux(self) -> None:
-        if not self.config.deployment.bootstrap_flux:
-            warn("Skipping Flux bootstrap")
+    def bootstrap_argocd(self) -> None:
+        if not self.config.deployment.bootstrap_argocd:
+            warn("Skipping Argo CD bootstrap")
             return
 
-        token = os.environ.get("GITHUB_TOKEN", "")
-        if not token:
-            token = getpass.getpass("GitHub token for Flux bootstrap: ").strip()
-        if not token:
-            raise InstallError("A GitHub token is required for Flux bootstrap")
-
-        owner = self.config.git.github_owner
-        repository = self.config.git.github_repository
-        if not owner or not repository:
-            raise InstallError("git.github_owner and git.github_repository are required")
-
-        info("Bootstrapping Flux")
+        info("Bootstrapping Argo CD")
         env = self.kubectl_env()
-        env["GITHUB_TOKEN"] = token
-        args = [
-            "flux",
-            "bootstrap",
-            "github",
-            f"--owner={owner}",
-            f"--repository={repository}",
-            f"--branch={self.config.git.infrastructure_branch}",
-            "--path=clusters/production",
-            "--personal",
+        commands = [
+            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/namespace.yaml")],
+            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/cmp-plugin.yaml")],
+            ["helm", "repo", "add", "argo", "https://argoproj.github.io/argo-helm", "--force-update"],
+            ["helm", "repo", "update"],
+            ["helm", "upgrade", "--install", "argocd", "argo/argo-cd", "--namespace", "argocd", "--create-namespace", "--values", str(self.repo_root / "argocd/values.yaml"), "--wait", "--timeout", "15m"],
+            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/project.yaml")],
+            ["kubectl", "apply", "-f", str(self.repo_root / "argocd/root-application.yaml")],
         ]
-        if self.dry_run:
-            info("[dry-run] " + shlex.join(args))
-            return
-        run(args, env=env, sensitive=True)
+        for command in commands:
+            if self.dry_run:
+                info("[dry-run] " + shlex.join(command))
+            else:
+                run(command, env=env)
 
     def build_and_import_images(self) -> None:
         if not self.config.deployment.build_application_images:
@@ -616,43 +603,27 @@ class Installer:
     def wait_for_cluster(self) -> None:
         if self.dry_run:
             return
-        info("Waiting for Flux and workloads")
+        info("Waiting for Argo CD applications and workloads")
         env = self.kubectl_env()
         deadline = time.time() + self.config.deployment.wait_timeout_seconds
         while time.time() < deadline:
-            result = run(
-                ["kubectl", "get", "kustomizations", "-A", "-o", "json"],
-                env=env,
-                check=False,
-                capture=True,
-            )
+            result = run(["kubectl", "get", "applications.argoproj.io", "-n", "argocd", "-o", "json"], env=env, check=False, capture=True)
             if result.returncode == 0:
                 try:
-                    payload = json.loads(result.stdout)
-                    items = payload.get("items", [])
-                    if items:
-                        all_ready = True
-                        for item in items:
-                            conditions = item.get("status", {}).get("conditions", [])
-                            ready = any(
-                                condition.get("type") == "Ready"
-                                and condition.get("status") == "True"
-                                for condition in conditions
-                            )
-                            all_ready = all_ready and ready
-                        if all_ready:
-                            success("All Flux Kustomizations are Ready")
-                            break
+                    items = json.loads(result.stdout).get("items", [])
+                    children = [item for item in items if item.get("metadata", {}).get("name") != "casinoshiz-production"]
+                    if children and all(item.get("status", {}).get("sync", {}).get("status") == "Synced" and item.get("status", {}).get("health", {}).get("status") in {"Healthy", "Progressing"} for item in children):
+                        success("All Argo CD applications are Synced")
+                        break
                 except json.JSONDecodeError:
                     pass
             time.sleep(10)
         else:
-            warn("Timed out waiting for all Flux Kustomizations")
-
+            warn("Timed out waiting for Argo CD applications")
+        run(["kubectl", "get", "applications", "-n", "argocd"], env=env, check=False)
         run(["kubectl", "get", "nodes", "-o", "wide"], env=env, check=False)
         run(["kubectl", "get", "pods", "-A"], env=env, check=False)
         run(["kubectl", "get", "pvc", "-A"], env=env, check=False)
-        run(["flux", "get", "all", "-A"], env=env, check=False)
 
     def run(self) -> None:
         self.require_tools()
@@ -672,7 +643,7 @@ class Installer:
         self.fetch_kubeconfig()
         self.install_sops_key()
         self.build_and_import_images()
-        self.bootstrap_flux()
+        self.bootstrap_argocd()
         self.wait_for_cluster()
 
         success("Installer finished")

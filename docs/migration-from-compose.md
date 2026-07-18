@@ -4,7 +4,7 @@ Migrate incrementally rather than translating the entire Compose file at once.
 
 ## Phase 1
 
-- k3s, Flux, cert-manager;
+- k3s, Argo CD, cert-manager;
 - external GHCR;
 - application Helm chart;
 - BFFs and game services;

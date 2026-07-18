@@ -1,6 +1,6 @@
 # Tracing
 
-Add Flux HelmReleases for:
+Managed as Argo CD Applications:
 
 - OpenTelemetry Collector
 - Grafana Tempo

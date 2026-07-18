@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: casinoshiz
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+spec:
+  project: casinoshiz
+  source:
+    repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
+    targetRevision: main
+    path: charts/casinoshiz
+    helm:
+      releaseName: casinoshiz
+      valueFiles:
+        - values-production.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: casinoshiz
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true

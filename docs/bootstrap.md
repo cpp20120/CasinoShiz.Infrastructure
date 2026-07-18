@@ -11,21 +11,21 @@ ansible-playbook playbooks/site.yml
 
 The generated kubeconfig is written to the repository root and ignored by Git.
 
-## 2. Flux bootstrap
+## 2. Argo CD bootstrap
 
-Install Flux CLI and export a GitHub token with repository administration access:
+Install Argo CD CLI and export a GitHub token with repository administration access:
 
 ```bash
 export GITHUB_TOKEN=...
-flux bootstrap github   --owner=cpp20120   --repository=CasinoShiz.Infrastructure   --branch=main   --path=clusters/production   --personal
+python scripts/installer.py --config deploy/installer.toml
 ```
 
-For a private repository, keep it private and let Flux create a deploy key.
+For a private repository, keep it private and let Argo CD create a deploy key.
 
 ## 3. Secrets
 
 Install SOPS and age. Generate an age key and register its public key in `.sops.yaml`.
-Store the private key in the cluster as `sops-age` in `flux-system`.
+Store the private key in the cluster as `sops-age` in `argocd`.
 
 Never commit plaintext credentials.
 
@@ -51,3 +51,14 @@ Recommended enablement order:
 - Test full restore onto a new VPS.
 - Restrict Grafana and MinIO admin endpoints.
 - Configure firewall for SSH, HTTP and HTTPS only.
+
+## Local Argo CD bootstrap
+
+```bash
+python scripts/infra.py local create
+python scripts/infra.py local argocd-bootstrap
+```
+
+The local root application deploys the data stack, observability, and the
+CasinoShiz chart with `charts/casinoshiz/values-local.yaml`. Push application
+images to the k3d registry with `python scripts/infra.py local image-push`.
