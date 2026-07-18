@@ -23,6 +23,29 @@ spec:
     server: https://kubernetes.default.svc
     namespace: data
 
+  ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      namespace: data
+      jqPathExpressions:
+        - .spec.podManagementPolicy
+        - .spec.updateStrategy
+        - .spec.revisionHistoryLimit
+        - .spec.template.metadata.creationTimestamp
+        - .spec.template.spec.dnsPolicy
+        - .spec.template.spec.restartPolicy
+        - .spec.template.spec.schedulerName
+        - .spec.template.spec.securityContext
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.template.spec.containers[].terminationMessagePath
+        - .spec.template.spec.containers[].terminationMessagePolicy
+        - .spec.template.spec.containers[].ports[].protocol
+        - .spec.template.spec.containers[].readinessProbe.successThreshold
+        - .spec.template.spec.containers[].livenessProbe.successThreshold
+        - .spec.template.spec.containers[].startupProbe.successThreshold
+        - .spec.volumeClaimTemplates[].metadata.creationTimestamp
+        - .spec.volumeClaimTemplates[].spec.volumeMode
+
   syncPolicy:
     automated:
       prune: true
@@ -30,4 +53,3 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - PruneLast=true
-      - ServerSideApply=true
