@@ -11,6 +11,11 @@ spec:
     repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
     targetRevision: main
     path: platform/monitoring
+    plugin:
+      name: sops-kustomize-v1.0
+      env:
+        - name: KUSTOMIZE_PATH
+          value: platform/monitoring
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
