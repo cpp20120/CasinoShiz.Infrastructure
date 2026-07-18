@@ -15,7 +15,7 @@ spec:
       name: sops-kustomize-v1.0
       env:
         - name: KUSTOMIZE_PATH
-          value: platform/monitoring
+          value: .
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
