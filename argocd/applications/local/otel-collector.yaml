@@ -35,12 +35,20 @@ spec:
               spike_limit_percentage: 15
             batch: {}
           exporters:
+            prometheus:
+              endpoint: 0.0.0.0:8889
+              resource_to_telemetry_conversion:
+                enabled: true
             otlp/tempo:
               endpoint: tempo.observability.svc.cluster.local:4317
               tls:
                 insecure: true
           service:
             pipelines:
+              metrics:
+                receivers: [otlp]
+                processors: [memory_limiter, batch]
+                exporters: [prometheus]
               traces:
                 receivers: [otlp]
                 processors: [memory_limiter, batch]
@@ -50,6 +58,11 @@ spec:
             enabled: true
           otlp-http:
             enabled: true
+          metrics:
+            enabled: true
+            containerPort: 8889
+            servicePort: 8889
+            protocol: TCP
   destination:
     server: https://kubernetes.default.svc
     namespace: observability

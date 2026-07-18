@@ -1,7 +1,7 @@
 global:
   imageRegistry: ghcr.io/cpp20120
   imagePullPolicy: IfNotPresent
-  otelEndpoint: http://otel-collector.observability.svc.cluster.local:4317
+  otelEndpoint: http://opentelemetry-collector.observability.svc.cluster.local:4317
   minioEndpoint: minio.data.svc.cluster.local:9000
   secretName: casinoshiz-secrets
 

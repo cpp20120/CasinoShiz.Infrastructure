@@ -5,8 +5,10 @@ This patch completes the non-secret platform layer:
 - cert-manager and Let's Encrypt ClusterIssuer bootstrap;
 - KEDA operator;
 - VictoriaMetrics, VMAlert, Alertmanager and Grafana;
+- VictoriaMetrics dashboards and PostgreSQL/Redis exporters;
 - monolithic Tempo with a PVC;
 - OpenTelemetry Collector;
+- local Vault and External Secrets Operator bootstrap;
 - frontend Deployment, Service and Ingress;
 - HPA for selected HTTP/gRPC services and all game workers;
 - baseline ingress NetworkPolicies;

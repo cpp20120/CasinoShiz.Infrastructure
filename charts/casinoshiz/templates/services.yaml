@@ -1,5 +1,7 @@
+{{- $gameRouteKeys := dict "dice" "Dice" "dicecube" "DiceCube" "darts" "Darts" "football" "Football" "basketball" "Basketball" "bowling" "Bowling" "transfer" "Transfer" "redeem" "Redeem" "leaderboard" "Leaderboard" "pixelbattle" "PixelBattle" "pick" "Pick" "blackjack" "Blackjack" "horse" "Horse" "challenges" "Challenges" "poker" "Poker" "secrethitler" "SecretHitler" "meta" "Meta" "admin" "Admin" }}
 {{- range $name, $svc := .Values.services }}
 {{- if $svc.enabled }}
+{{- $isBff := or (eq $name "telegram-bff") (eq $name "discord-bff") }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -31,6 +33,48 @@ spec:
               value: {{ $svc.serviceName | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.global.otelEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_METRIC_EXPORT_INTERVAL
+              value: "10000"
+            {{- if $isBff }}
+            - name: Backend__GrpcAddress
+              value: "http://game-admin:8081"
+            {{- range $gameName, $game := $.Values.games }}
+            {{- if $game.enabled }}
+            - name: Backend__GameAddresses__{{ index $gameRouteKeys $gameName }}
+              value: "http://game-{{ $gameName }}:8081"
+            {{- end }}
+            {{- end }}
+            - name: Services__Identity__Address
+              value: "http://identity:8081"
+            - name: Services__Wallet__Address
+              value: "http://wallet:8081"
+            {{- end }}
+            {{- if eq $name "rest-api" }}
+            - name: Backend__GrpcAddress
+              value: "http://game-admin:8081"
+            {{- end }}
+            {{- if eq $name "admin-bff" }}
+            - name: Services__Backend__Address
+              value: "http://game-admin:8080"
+            - name: Services__Backend__GrpcAddress
+              value: "http://game-admin:8081"
+            - name: Services__Identity__Address
+              value: "http://identity:8081"
+            - name: Services__Wallet__Address
+              value: "http://wallet:8081"
+            - name: Services__Operations__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: operations-api-key
+            - name: Admin__WebToken
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.global.secretName }}
+                  key: admin-web-token
+            {{- end }}
             - name: ConnectionStrings__Postgres
               valueFrom:
                 secretKeyRef:
@@ -66,7 +110,7 @@ spec:
             periodSeconds: 2
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: {{ if eq $name "telegram-bff" }}/health/live{{ else }}/health/ready{{ end }}
               port: http
             periodSeconds: 5
             timeoutSeconds: 3

@@ -1,0 +1,41 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: casinoshiz-otel-metrics
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
+spec:
+  namespaceSelector:
+    matchNames:
+      - observability
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+      app.kubernetes.io/instance: opentelemetry-collector
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: casinoshiz-data-exporters
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: casinoshiz
+spec:
+  namespaceSelector:
+    matchNames:
+      - data
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: metrics-exporter
+      app.kubernetes.io/part-of: casinoshiz
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

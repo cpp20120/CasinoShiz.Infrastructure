@@ -33,6 +33,12 @@ spec:
           enabled: true
         grafana:
           enabled: true
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL
           persistence:
             enabled: true
             storageClassName: local-path

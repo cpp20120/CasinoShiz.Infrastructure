@@ -11,8 +11,6 @@ data:
       name: sops-kustomize
     spec:
       version: v1.0
-      discover:
-        fileName: kustomization.yaml
       generate:
         command: 
           - /bin/sh
@@ -24,8 +22,8 @@ data:
             trap 'rm -rf "$workdir"' EXIT
 
             cp -a . "$workdir/repo"
-            
-            find "$workdir/repo/$target" 
+
+            find "$workdir/repo/$target" \
               -type f \( -name '*.secret.yaml' -o -name '*.secret.yml' \) \
               -exec sh -ec '
                 for file do
@@ -33,6 +31,6 @@ data:
                   mv "$file.dec" "$file"
                 done
               ' sh {} +
-            
-            cd "$workdir/repo"
+
+            cd "$workdir/repo/$target"
             kustomize build .

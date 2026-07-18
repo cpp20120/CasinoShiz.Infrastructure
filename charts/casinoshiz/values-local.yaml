@@ -1,7 +1,9 @@
 global:
   imageRegistry: k3d-casinoshiz-registry.localhost:5000
   imagePullPolicy: Always
+  otelEndpoint: http://opentelemetry-collector.observability.svc.cluster.local:4317
   minioEndpoint: minio.data.svc.cluster.local:9000
+  secretName: casinoshiz-secrets-vault
 
 ingress:
   enabled: true
@@ -12,6 +14,7 @@ monitoring:
   enabled: true
 
 frontend:
+  enabled: false
   host: app.casinoshiz.localhost
   image:
     repository: casinoshiz-frontend
@@ -33,6 +36,7 @@ services:
     host: tg.casinoshiz.localhost
     autoscaling: false
   discord-bff:
+    enabled: false
     image: { repository: casinoshiz-discord-bff, tag: local }
     autoscaling: false
   admin-bff:

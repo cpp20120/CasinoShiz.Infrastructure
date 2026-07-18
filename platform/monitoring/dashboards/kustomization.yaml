@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+configMapGenerator:
+  - name: casinoshiz-grafana-dashboards
+    files:
+      - casinoshiz-microservices.json
+      - casinoshiz-data.json
+      - casinoshiz-alerts.json
+      - legacy/analytics-clickhouse.json
+      - legacy/clickhouse-events-explorer.json
+      - legacy/dotnet-runtime.json
+      - legacy/growth-reliability-clickhouse.json
+      - legacy/infra-pg-redis.json
+      - legacy/infra-services.json
+      - legacy/interactions-clickhouse.json
+      - legacy/microservices-overview.json
+      - legacy/overview.json
+      - legacy/postgres.json
+      - legacy/product-analytics-clickhouse.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+generatorOptions:
+  disableNameSuffixHash: true

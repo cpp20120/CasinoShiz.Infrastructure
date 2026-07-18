@@ -1,0 +1,24 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"type":"stat","title":"PostgreSQL exporter","gridPos":{"h":4,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"max(pg_up{job=\"postgres-exporter\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Redis exporter","gridPos":{"h":4,"w":6,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"max(redis_up{job=\"redis-exporter\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"PostgreSQL connections","gridPos":{"h":4,"w":6,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(pg_stat_database_numbackends{job=\"postgres-exporter\",datname!~\"template0|template1\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Redis clients","gridPos":{"h":4,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"max(redis_connected_clients{job=\"redis-exporter\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"timeseries","title":"PostgreSQL connections by database","gridPos":{"h":8,"w":12,"x":0,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (datname) (pg_stat_database_numbackends{job=\"postgres-exporter\",datname!~\"template0|template1\"})","legendFormat":"{{datname}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"short","min":0},"overrides":[]}},
+    {"type":"timeseries","title":"PostgreSQL transactions","gridPos":{"h":8,"w":12,"x":12,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (datname) (rate(pg_stat_database_xact_commit{job=\"postgres-exporter\"}[5m]))","legendFormat":"{{datname}} commit","refId":"A"},{"expr":"sum by (datname) (rate(pg_stat_database_xact_rollback{job=\"postgres-exporter\"}[5m]))","legendFormat":"{{datname}} rollback","refId":"B"}],"fieldConfig":{"defaults":{"unit":"ops","min":0},"overrides":[]}},
+    {"type":"timeseries","title":"Redis memory","gridPos":{"h":8,"w":12,"x":0,"y":12},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"max(redis_memory_used_bytes{job=\"redis-exporter\"})","legendFormat":"used","refId":"A"}],"fieldConfig":{"defaults":{"unit":"bytes"},"overrides":[]}},
+    {"type":"timeseries","title":"Redis commands","gridPos":{"h":8,"w":12,"x":12,"y":12},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"rate(redis_commands_processed_total{job=\"redis-exporter\"}[5m])","legendFormat":"commands/s","refId":"A"},{"expr":"rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m])","legendFormat":"hits/s","refId":"B"},{"expr":"rate(redis_keyspace_misses_total{job=\"redis-exporter\"}[5m])","legendFormat":"misses/s","refId":"C"}],"fieldConfig":{"defaults":{"unit":"ops","min":0},"overrides":[]}}
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["casinoshiz", "victoriametrics", "postgresql", "redis"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "CasinoShiz · PostgreSQL & Redis",
+  "uid": "cazinoshiz-data-vm",
+  "version": 1
+}

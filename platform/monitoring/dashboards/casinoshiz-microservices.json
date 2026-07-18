@@ -1,0 +1,26 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"type":"stat","title":"CasinoShiz pods","gridPos":{"h":4,"w":6,"x":0,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"count(kube_pod_info{namespace=\"casinoshiz\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Pods ready","gridPos":{"h":4,"w":6,"x":6,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(kube_pod_status_ready{namespace=\"casinoshiz\",condition=\"true\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"CrashLoopBackOff","gridPos":{"h":4,"w":6,"x":12,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(kube_pod_container_status_waiting_reason{namespace=\"casinoshiz\",reason=\"CrashLoopBackOff\"})","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"stat","title":"Restarts (15m)","gridPos":{"h":4,"w":6,"x":18,"y":0},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum(increase(kube_pod_container_status_restarts_total{namespace=\"casinoshiz\"}[15m]))","refId":"A"}],"options":{"reduceOptions":{"calcs":["lastNotNull"]},"textMode":"value"}},
+    {"type":"timeseries","title":"Container CPU by pod","gridPos":{"h":8,"w":12,"x":0,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"casinoshiz\",container!=\"\",container!=\"POD\"}[5m]))","legendFormat":"{{pod}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"cores","min":0},"overrides":[]}},
+    {"type":"timeseries","title":"Container memory by pod","gridPos":{"h":8,"w":12,"x":12,"y":4},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (pod) (container_memory_working_set_bytes{namespace=\"casinoshiz\",container!=\"\",container!=\"POD\"})","legendFormat":"{{pod}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"bytes"},"overrides":[]}},
+    {"type":"timeseries","title":"HTTP request rate","gridPos":{"h":8,"w":12,"x":0,"y":12},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (service_name) (rate(botframework_request_duration_seconds_count[5m]))","legendFormat":"{{service_name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"reqps"},"overrides":[]}},
+    {"type":"timeseries","title":"HTTP p95 latency","gridPos":{"h":8,"w":12,"x":12,"y":12},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, service_name) (rate(botframework_request_duration_seconds_bucket[5m])))","legendFormat":"{{service_name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}},
+    {"type":"timeseries","title":"Game command failures","gridPos":{"h":8,"w":12,"x":0,"y":20},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"sum by (service_name) (rate(game_command_failures_total[10m]))","legendFormat":"{{service_name}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"cps"},"overrides":[]}},
+    {"type":"timeseries","title":"Game command duration p95","gridPos":{"h":8,"w":12,"x":12,"y":20},"datasource":{"type":"prometheus","uid":"VictoriaMetrics"},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, service_name, module) (rate(game_command_execution_duration_bucket[10m])))","legendFormat":"{{service_name}} / {{module}}","refId":"A"}],"fieldConfig":{"defaults":{"unit":"s"},"overrides":[]}}
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["casinoshiz", "victoriametrics", "microservices"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "CasinoShiz · Microservices",
+  "uid": "cazinoshiz-microservices-vm",
+  "version": 1
+}
