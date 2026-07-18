@@ -23,9 +23,34 @@ spec:
       - PruneLast=true
       - ServerSideApply=true
   ignoreDifferences:
+    - group: apps
+      kind: StatefulSet
+      namespace: casinoshiz-bot2
+      jqPathExpressions:
+        - .spec.podManagementPolicy
+        - .spec.updateStrategy
+        - .spec.revisionHistoryLimit
+        - .spec.template.metadata.creationTimestamp
+        - .spec.template.spec.dnsPolicy
+        - .spec.template.spec.restartPolicy
+        - .spec.template.spec.schedulerName
+        - .spec.template.spec.securityContext
+        - .spec.template.spec.containers[].imagePullPolicy
+        - .spec.template.spec.containers[].terminationMessagePath
+        - .spec.template.spec.containers[].terminationMessagePolicy
+        - .spec.template.spec.containers[].ports[].protocol
+        - .spec.template.spec.containers[].readinessProbe.successThreshold
+        - .spec.template.spec.containers[].livenessProbe.successThreshold
+        - .spec.template.spec.containers[].startupProbe.successThreshold
+        - .spec.volumeClaimTemplates[].metadata.creationTimestamp
+        - .spec.volumeClaimTemplates[].spec.volumeMode
     - group: external-secrets.io
       kind: ExternalSecret
       name: casinoshiz-bot2-secrets
       namespace: casinoshiz-bot2
       jqPathExpressions:
         - .metadata.annotations["force-sync"]
+        - .spec.dataFrom[].extract.conversionStrategy
+        - .spec.dataFrom[].extract.decodingStrategy
+        - .spec.dataFrom[].extract.metadataPolicy
+        - .spec.target.deletionPolicy
