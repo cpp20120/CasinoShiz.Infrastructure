@@ -9,7 +9,7 @@ spec:
   project: casinoshiz
   source:
     repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
-    targetRevision: master
+    targetRevision: main
     path: argocd/applications/local
   destination:
     server: https://kubernetes.default.svc

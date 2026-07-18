@@ -9,7 +9,7 @@ spec:
   project: casinoshiz
   source:
     repoURL: https://github.com/cpp20120/CasinoShiz.Infrastructure.git
-    targetRevision: master
+    targetRevision: main
     path: charts/casinoshiz
     helm:
       releaseName: casinoshiz
