@@ -42,27 +42,7 @@ spec:
           persistence: { enabled: false }
           plugins:
             - grafana-clickhouse-datasource
-          "grafana.ini":
-            auth.generic_oauth:
-              enabled: true
-              name: Keycloak
-              allow_sign_up: true
-              client_id: grafana
-              client_secret: $__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
-              scopes: openid profile email groups
-              auth_url: http://keycloak.casinoshiz.localhost:8080/realms/casinoshiz/protocol/openid-connect/auth
-              token_url: http://keycloak.casinoshiz.localhost:8080/realms/casinoshiz/protocol/openid-connect/token
-              api_url: http://keycloak.casinoshiz.localhost:8080/realms/casinoshiz/protocol/openid-connect/userinfo
-              role_attribute_path: >-
-                contains(groups[*], 'platform-admins') && 'Admin' ||
-                contains(groups[*], 'platform-readonly') && 'Viewer' || 'Viewer'
-            security:
-              allow_assign_grafana_admin: true
           envValueFrom:
-            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
-              secretKeyRef:
-                name: grafana-oidc
-                key: client-secret
             CLICKHOUSE_PASSWORD:
               secretKeyRef:
                 name: grafana-clickhouse-secret

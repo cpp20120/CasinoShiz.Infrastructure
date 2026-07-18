@@ -1,21 +1,6 @@
 global:
   domain: argocd.casinoshiz.localhost
 
-configs:
-  cm:
-    url: http://argocd.casinoshiz.localhost:8080
-    oidc.config: |
-      name: Keycloak
-      issuer: http://keycloak.casinoshiz.localhost:8080/realms/casinoshiz
-      clientID: argocd
-      clientSecret: $oidc.keycloak.clientSecret
-      requestedScopes: ["openid", "profile", "email", "groups"]
-  rbac:
-    policy.csv: |
-      g, platform-admins, role:admin
-      g, platform-readonly, role:readonly
-    scopes: '[groups, email]'
-
 server:
   ingress:
     enabled: false
