@@ -5,6 +5,7 @@
 .sops.yaml.local
 age.agekey
 kubeconfig
+headlamp-token.txt
 *.tar
 *.tgz
 .DS_Store

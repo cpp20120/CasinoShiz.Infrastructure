@@ -35,7 +35,7 @@
       "title": "Drive usage",
       "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
       "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"},
-      "targets": [{"expr": "100 * sum(minio_node_drive_used_bytes{job=\"minio\"}) / clamp_min(sum(minio_node_drive_used_bytes{job=\"minio\"}) + sum(minio_node_drive_free_bytes{job=\"minio\"}), 1)", "refId": "A"}],
+      "targets": [{"expr": "100 * sum(minio_system_drive_used_bytes{job=\"minio\"}) / clamp_min(sum(minio_system_drive_used_bytes{job=\"minio\"}) + sum(minio_system_drive_free_bytes{job=\"minio\"}), 1)", "refId": "A"}],
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "textMode": "value"},
       "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 70}, {"color": "red", "value": 90}]}}, "overrides": []}
     },
@@ -44,7 +44,7 @@
       "title": "S3 requests",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
       "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"},
-      "targets": [{"expr": "sum(rate(minio_s3_requests_total{job=\"minio\"}[5m]))", "legendFormat": "requests/s", "refId": "A"}, {"expr": "sum(rate(minio_s3_requests_errors_total{job=\"minio\"}[5m]))", "legendFormat": "errors/s", "refId": "B"}],
+      "targets": [{"expr": "sum(rate(minio_api_requests_total{job=\"minio\"}[5m])) or vector(0)", "legendFormat": "requests/s", "refId": "A"}, {"expr": "sum(rate(minio_api_requests_errors_total{job=\"minio\"}[5m])) or vector(0)", "legendFormat": "errors/s", "refId": "B"}],
       "fieldConfig": {"defaults": {"unit": "ops", "min": 0}, "overrides": []}
     },
     {
@@ -52,7 +52,7 @@
       "title": "S3 traffic",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
       "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"},
-      "targets": [{"expr": "sum(rate(minio_s3_traffic_received_bytes{job=\"minio\"}[5m]))", "legendFormat": "received", "refId": "A"}, {"expr": "sum(rate(minio_s3_traffic_sent_bytes{job=\"minio\"}[5m]))", "legendFormat": "sent", "refId": "B"}],
+      "targets": [{"expr": "sum(rate(minio_api_requests_traffic_received_bytes{job=\"minio\"}[5m])) or vector(0)", "legendFormat": "received", "refId": "A"}, {"expr": "sum(rate(minio_api_requests_traffic_sent_bytes{job=\"minio\"}[5m])) or vector(0)", "legendFormat": "sent", "refId": "B"}],
       "fieldConfig": {"defaults": {"unit": "Bps", "min": 0}, "overrides": []}
     },
     {
@@ -60,7 +60,7 @@
       "title": "Drive space",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
       "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"},
-      "targets": [{"expr": "sum(minio_node_drive_used_bytes{job=\"minio\"})", "legendFormat": "used", "refId": "A"}, {"expr": "sum(minio_node_drive_free_bytes{job=\"minio\"})", "legendFormat": "free", "refId": "B"}],
+      "targets": [{"expr": "sum(minio_system_drive_used_bytes{job=\"minio\"})", "legendFormat": "used", "refId": "A"}, {"expr": "sum(minio_system_drive_free_bytes{job=\"minio\"})", "legendFormat": "free", "refId": "B"}],
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []}
     },
     {
@@ -68,7 +68,7 @@
       "title": "Bucket usage",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
       "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"},
-      "targets": [{"expr": "sum by (bucket) (minio_bucket_usage_total_bytes{job=\"minio\"})", "legendFormat": "{{bucket}}", "refId": "A"}],
+      "targets": [{"expr": "sum by (bucket) (minio_cluster_usage_buckets_total_bytes{job=\"minio\"}) or vector(0)", "legendFormat": "{{bucket}}", "refId": "A"}],
       "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []}
     }
   ],
